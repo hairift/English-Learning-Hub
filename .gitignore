@@ -1,0 +1,55 @@
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment (kunci API rahasia TIDAK ikut ter-commit)
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Logs
+*.log
+logs/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+pipecat_service/.venv/
+tts_service/.venv/
+
+# Build output
+dist/
+build/
+.next/
+coverage/
+
+# Runtime/cache
+.cache/
+.codex/
+.agents/
+.claude/
+.turbo/
+.superpowers/
+__pycache__/
+*.py[cod]
+
+# Demo artifacts generated locally
+artifacts/
+*.mov
+*.mp4
+*.webm
+
+# Pengaturan runtime dari panel pengaturan (berisi kunci API lokal)
+.sela-settings.json
+
+# Cache optimasi Vite (ditaruh di akar proyek)
+.vite-cache/
+
+# Log layanan TTS lokal
+tts_service/_server.log

@@ -1,0 +1,12 @@
+# Layanan TTS Supertonic — Sela Tutor English
+# Supertonic: on-device TTS 31 bahasa (termasuk Indonesia & Inggris).
+supertonic
+
+# Web framework untuk sidecar service.
+fastapi
+uvicorn[standard]
+
+# Utilitas.
+python-dotenv
+num2words
+numpy

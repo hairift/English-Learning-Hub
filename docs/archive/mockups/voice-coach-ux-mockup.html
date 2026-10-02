@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>lingo coach · UX 重构 mockup</title>
+<style>
+  :root{
+    --feather-green:#58CC02; --mask-green:#89E219; --wing-overlay:#43C000;
+    --macaw:#1CB0F6; --cardinal:#FF4B4B; --bee:#FFC800; --fox:#FF9600;
+    --purple:#CE82FF; --coral:#FF7A7A; --eel:#4B4B4B; --wolf:#777777;
+    --hare:#AFAFAF; --swan:#E5E5E5; --snow:#FFFFFF; --panel-bg:#F7F7F7;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Nunito","Avenir Next Rounded","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:var(--panel-bg); color:var(--eel); line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .topbar{height:48px;background:var(--feather-green);display:flex;align-items:center;
+    padding:0 40px;gap:14px;position:sticky;top:0;z-index:50}
+  .topbar .mark{color:#fff;font-weight:900;font-size:20px;letter-spacing:-0.02em}
+  .topbar .note{color:rgba(255,255,255,.85);font-weight:700;font-size:13px}
+  /* tab nav */
+  .tabs{position:sticky;top:48px;z-index:40;background:var(--snow);border-bottom:2px solid var(--swan);
+    display:flex;gap:8px;padding:10px 40px}
+  .tab{border:none;background:var(--panel-bg);border:2px solid var(--swan);border-radius:14px;
+    padding:8px 18px;font-weight:800;font-size:14px;color:var(--wolf);cursor:pointer;transition:all .18s}
+  .tab.active{background:var(--feather-green);color:#fff;border-color:var(--wing-overlay)}
+  .wrap{max-width:1440px;margin:0 auto;padding:48px 40px 96px}
+  .screen{display:none}
+  .screen.active{display:block}
+  .label{font-size:13px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--wolf)}
+  h1{font-size:clamp(30px,3.4vw,46px);font-weight:900;line-height:1.05;letter-spacing:-0.02em}
+  h2{font-size:clamp(24px,2.4vw,34px);font-weight:900;letter-spacing:-0.02em}
+  .muted{color:var(--wolf)}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--snow);border:2px solid var(--swan);
+    border-radius:999px;padding:5px 12px;font-weight:800;font-size:12px;color:var(--eel)}
+  .pill.green{background:#eafbe0;border-color:var(--mask-green);color:var(--wing-overlay)}
+  .pill.blue{background:#e6f6ff;border-color:var(--macaw);color:#0f82bd}
+  .pill.bee{background:#fff7d6;border-color:var(--bee);color:#a98400}
+  .card{background:var(--snow);border:2px solid var(--swan);border-radius:22px;padding:24px;
+    box-shadow:0 3px 0 rgba(0,0,0,.05)}
+  .btn{border:none;border-radius:16px;font-weight:900;cursor:pointer;transition:all .18s;font-family:inherit}
+  .btn-primary{background:var(--feather-green);color:#fff;padding:18px 28px;font-size:18px;
+    box-shadow:0 4px 0 var(--wing-overlay)}
+  .btn-primary:hover{filter:brightness(1.03);transform:translateY(-2px)}
+  .btn-ghost{background:var(--snow);color:var(--eel);border:2px solid var(--swan);padding:12px 18px;font-size:14px;font-weight:800}
+  /* ===== HOME ===== */
+  .hero{display:grid;grid-template-columns:1.05fr 1.1fr .95fr;gap:24px;align-items:stretch}
+  .task .goalbox{background:#eafbe0;border:2px solid var(--mask-green);border-radius:16px;padding:14px 16px;margin:16px 0;font-weight:700}
+  .task .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+  .lowpress{margin-top:14px;color:var(--wolf);font-size:14px}
+  .coach{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    background:linear-gradient(180deg,#f3fde9,#ffffff)}
+  .bubble{background:var(--snow);border:2px solid var(--swan);border-radius:18px;padding:12px 16px;
+    font-weight:800;position:relative;margin-bottom:18px;max-width:300px}
+  .bubble:after{content:"";position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);
+    border:8px solid transparent;border-top-color:var(--snow)}
+  .status-chip{margin-top:16px;background:#eafbe0;border:2px solid var(--mask-green);color:var(--wing-overlay);
+    border-radius:999px;padding:6px 14px;font-weight:900;font-size:13px}
+  .growth .row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px dashed var(--swan)}
+  .growth .row:last-child{border-bottom:none}
+  .growth .big{font-size:26px;font-weight:900;color:var(--feather-green)}
+  .nexttarget{background:#fff7d6;border:2px solid var(--bee);border-radius:14px;padding:12px;margin-top:12px;font-weight:700;font-size:14px}
+  .value-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:28px}
+  .vcard{background:var(--snow);border:2px solid var(--swan);border-radius:18px;padding:18px}
+  .vcard .ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:10px}
+  .scenes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
+  .scene{border-radius:20px;padding:22px;color:#fff;position:relative;overflow:hidden;min-height:200px;display:flex;flex-direction:column}
+  .scene h3{font-size:26px;font-weight:900;letter-spacing:-0.02em}
+  .scene .meta{margin-top:10px;font-size:13px;font-weight:700;opacity:.95;line-height:1.7}
+  .scene .tags{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+  .scene .tag{background:rgba(255,255,255,.25);border-radius:999px;padding:3px 10px;font-size:11px;font-weight:800}
+  .scene .go{margin-top:auto;background:#fff;color:var(--eel);border-radius:12px;padding:10px;text-align:center;font-weight:900;font-size:14px}
+  /* ===== PRACTICE ===== */
+  .pr-top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+  .pr-grid{display:grid;grid-template-columns:1fr 340px;gap:24px}
+  .stage{background:linear-gradient(180deg,#f3fde9,#ffffff);border:2px solid var(--swan);border-radius:24px;
+    padding:32px;display:flex;flex-direction:column;align-items:center;text-align:center;min-height:460px;justify-content:center}
+  .q-bubble{background:var(--snow);border:2px solid var(--macaw);border-radius:18px;padding:16px 20px;
+    font-size:20px;font-weight:800;max-width:520px;margin-bottom:24px;color:var(--eel)}
+  .speakbtn{background:var(--feather-green);color:#fff;border:none;border-radius:999px;width:120px;height:120px;
+    font-weight:900;font-size:16px;box-shadow:0 6px 0 var(--wing-overlay);cursor:pointer;margin-top:8px}
+  .subtitle-live{margin-top:22px;background:var(--panel-bg);border:2px dashed var(--swan);border-radius:14px;
+    padding:12px 16px;color:var(--wolf);font-weight:700;min-width:60%}
+  .sidepanel .blk{margin-bottom:14px}
+  .goal-now{background:#eafbe0;border:2px solid var(--mask-green);border-radius:14px;padding:14px}
+  .tip{background:#fff7d6;border:2px solid var(--bee);border-radius:14px;padding:12px;font-weight:700;font-size:14px}
+  .metric{display:flex;justify-content:space-between;align-items:center;padding:7px 0;font-size:14px;font-weight:700}
+  .bar{height:8px;border-radius:99px;background:var(--swan);width:120px;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--feather-green)}
+  .tech{margin-top:12px;background:var(--panel-bg);border:2px solid var(--swan);border-radius:12px;padding:10px 12px;font-size:13px;font-weight:800;color:var(--wolf)}
+  .checklist .c{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;font-weight:700}
+  .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--hare)}
+  .dot.done{background:var(--feather-green);border-color:var(--wing-overlay)}
+  .dot.active{background:var(--bee);border-color:var(--fox)}
+  /* ===== REPORT ===== */
+  .rp-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .score-hero{grid-column:1/-1;background:linear-gradient(135deg,var(--feather-green),var(--mask-green));
+    color:#fff;border-radius:24px;padding:32px;display:flex;align-items:center;gap:28px}
+  .score-num{font-size:72px;font-weight:900;line-height:1}
+  .dims .dim{margin-bottom:14px}
+  .dims .dim .t{display:flex;justify-content:space-between;font-weight:800;font-size:14px;margin-bottom:4px}
+  .dims .bar{width:100%}
+  .fix .orig{color:var(--wolf);text-decoration:line-through}
+  .fix .better{color:var(--feather-green);font-weight:900;font-size:18px;margin:6px 0}
+  .fix .reason{color:var(--wolf);font-size:14px}
+  .replay li{margin:8px 0;background:#eafbe0;border:2px solid var(--mask-green);border-radius:12px;padding:10px 14px;font-weight:700;list-style:none}
+  .encourage{background:#fff7d6;border:2px solid var(--bee);border-radius:16px;padding:16px;font-weight:800;grid-column:1/-1}
+  @media(max-width:1100px){.hero{grid-template-columns:1fr}.value-row{grid-template-columns:repeat(2,1fr)}
+    .scenes{grid-template-columns:1fr}.pr-grid{grid-template-columns:1fr}.rp-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <div class="topbar"><span class="mark">lingo coach</span><span class="note">AI English speaking practice · UX mockup</span></div>
+  <div class="tabs">
+    <button class="tab active" onclick="show('home',this)">① 首页</button>
+    <button class="tab" onclick="show('practice',this)">② 练习页(舞台式)</button>
+    <button class="tab" onclick="show('report',this)">③ 报告页(诊断单)</button>
+  </div>
+
+  <!-- ================= HOME ================= -->
+  <div class="wrap screen active" id="home">
+    <div class="hero">
+      <!-- 左:今日任务 -->
+      <div class="card task">
+        <span class="label">今日任务</span>
+        <h1 style="margin-top:10px">今天只练 5 分钟,<br/>把一个回答说清楚。</h1>
+        <p class="muted" style="margin-top:8px">AI 会先提问,你只需要开口回答。说错也没关系,系统会在课后帮你整理。</p>
+        <div class="goalbox">🎯 本轮目标:用英文讲清楚一个项目 —— 先说清价值,再补一个数字。</div>
+        <div class="actions">
+          <button class="btn btn-primary">开始 5 分钟练习 →</button>
+          <button class="btn btn-ghost">更换场景</button>
+          <button class="btn btn-ghost">查看上次报告</button>
+        </div>
+        <p class="lowpress">💛 低压模式:没有“测试/扣分”,只有“练习 + 成长建议”。</p>
+      </div>
+
+      <!-- 中:虚拟陪练 -->
+      <div class="card coach">
+        <div class="bubble">Ready for a 5-minute interview practice? 😊</div>
+        <!-- 几何 SVG 面试官 -->
+        <svg width="220" height="240" viewBox="0 0 220 240" aria-label="AI interviewer">
+          <ellipse cx="110" cy="226" rx="78" ry="10" fill="#E5E5E5"/>
+          <rect x="56" y="120" width="108" height="96" rx="34" fill="#1CB0F6"/>
+          <rect x="92" y="120" width="36" height="60" rx="14" fill="#FFFFFF"/>
+          <circle cx="110" cy="74" r="46" fill="#FFD9A8"/>
+          <path d="M64 70 a46 46 0 0 1 92 0 v-6 a46 46 0 0 0 -92 0 z" fill="#4B4B4B"/>
+          <circle cx="94" cy="76" r="6" fill="#4B4B4B"/>
+          <circle cx="126" cy="76" r="6" fill="#4B4B4B"/>
+          <path d="M98 96 q12 10 24 0" stroke="#4B4B4B" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <rect x="150" y="150" width="44" height="56" rx="8" fill="#FFFFFF" stroke="#E5E5E5" stroke-width="3" transform="rotate(8 172 178)"/>
+        </svg>
+        <div class="status-chip">● 待机陪练中</div>
+      </div>
+
+      <!-- 右:成长轨迹 -->
+      <div class="card growth">
+        <span class="label">我的成长轨迹</span>
+        <div class="row"><span class="muted">连续练习</span><span class="big">3 天 🔥</span></div>
+        <div class="row"><span class="muted">累计口语时间</span><span style="font-weight:800">28 分钟</span></div>
+        <div class="row"><span class="muted">最近得分</span><span style="font-weight:800">76</span></div>
+        <div class="row"><span class="muted">当前薄弱项</span><span class="pill bee">结果量化表达</span></div>
+        <div class="nexttarget">📌 推荐下一练:面试 · 项目成果追问<br/>下一轮把 “improved route flow” 说成 “reduced route search time by 30%”。</div>
+      </div>
+    </div>
+
+    <!-- 价值主张 -->
+    <span class="label" style="display:block;margin-top:34px">为什么用 lingo coach</span>
+    <div class="value-row">
+      <div class="vcard"><div class="ic" style="background:#eafbe0">🎭</div><b>真实场景追问</b><p class="muted" style="font-size:13px;margin-top:4px">AI 扮演面试官 / 服务员 / 会议同事,像真人一样追问。</p></div>
+      <div class="vcard"><div class="ic" style="background:#e6f6ff">🎙️</div><b>低压开口</b><p class="muted" style="font-size:13px;margin-top:4px">点一下“开始回答”即可,系统自动转写和记录。</p></div>
+      <div class="vcard"><div class="ic" style="background:#f3e8ff">📋</div><b>课后成长报告</b><p class="muted" style="font-size:13px;margin-top:4px">总结发音、语法、表达,并给出下一轮目标。</p></div>
+      <div class="vcard"><div class="ic" style="background:#fff7d6">📈</div><b>持续成长</b><p class="muted" style="font-size:13px;margin-top:4px">每次练习沉淀为成长轨迹,越练越有方向。</p></div>
+    </div>
+
+    <!-- 场景卡片(带训练收益) -->
+    <span class="label" style="display:block;margin-top:34px">选择真实场景</span>
+    <div class="scenes">
+      <div class="scene" style="background:var(--feather-green)">
+        <div class="tags"><span class="tag">推荐</span><span class="tag">适合面试前</span><span class="tag">结果量化训练</span></div>
+        <h3>面试 Interview</h3>
+        <div class="meta">训练目标:自我介绍、项目经历、追问回应<br/>核心能力:结构表达 · 结果量化 · 追问应对<br/>适合:实习面试 / 英文答辩 · 5 分钟 · B1–B2</div>
+        <div class="go">开始练习 →</div>
+      </div>
+      <div class="scene" style="background:var(--macaw)">
+        <div class="tags"><span class="tag">低压力入门</span></div>
+        <h3>点餐 Restaurant</h3>
+        <div class="meta">训练目标:点餐、提问、应对推荐<br/>核心能力:日常对话 · 礼貌表达<br/>适合:出国旅行 · 4 分钟 · A2–B1</div>
+        <div class="go">开始练习 →</div>
+      </div>
+      <div class="scene" style="background:var(--purple)">
+        <div class="tags"><span class="tag">进阶</span></div>
+        <h3>会议 Meeting</h3>
+        <div class="meta">训练目标:汇报进度、表达观点、回应同事<br/>核心能力:观点表达 · 逻辑衔接<br/>适合:职场英语 · 6 分钟 · B2</div>
+        <div class="go">开始练习 →</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PRACTICE ================= -->
+  <div class="wrap screen" id="practice">
+    <div class="pr-top">
+      <span class="pill green">面试 Interview</span>
+      <span class="pill">第 3 / 8 轮</span>
+      <span class="pill bee">⏱ 03:42</span>
+      <span class="pill blue">🎯 本轮目标:回答里加入 1 个数字</span>
+    </div>
+    <div class="pr-grid">
+      <!-- 舞台 -->
+      <div class="stage">
+        <div class="q-bubble">“What measurable result did this project achieve?”</div>
+        <svg width="200" height="210" viewBox="0 0 220 240" aria-label="AI interviewer speaking">
+          <ellipse cx="110" cy="226" rx="78" ry="10" fill="#E5E5E5"/>
+          <rect x="56" y="120" width="108" height="96" rx="34" fill="#1CB0F6"/>
+          <rect x="92" y="120" width="36" height="60" rx="14" fill="#FFFFFF"/>
+          <circle cx="110" cy="74" r="46" fill="#FFD9A8"/>
+          <path d="M64 70 a46 46 0 0 1 92 0 v-6 a46 46 0 0 0 -92 0 z" fill="#4B4B4B"/>
+          <circle cx="94" cy="76" r="6" fill="#4B4B4B"/>
+          <circle cx="126" cy="76" r="6" fill="#4B4B4B"/>
+          <ellipse cx="110" cy="98" rx="9" ry="7" fill="#4B4B4B"/>
+          <path d="M170 60 q14 14 0 28 M182 52 q22 22 0 44" stroke="#58CC02" stroke-width="4" fill="none" stroke-linecap="round"/>
+        </svg>
+        <button class="speakbtn">开始回答</button>
+        <div class="subtitle-live">Listening… “I built a campus navigation app and improved…”</div>
+        <p class="muted" style="margin-top:10px;font-size:13px">说完停顿一下即可,系统会自动提交,无需点击。</p>
+      </div>
+      <!-- 右侧导航 -->
+      <div class="sidepanel">
+        <div class="card blk goal-now">
+          <span class="label">本轮目标</span>
+          <p style="font-weight:800;margin-top:6px">说清楚项目价值</p>
+          <p class="muted" style="font-size:13px">完成条件:回答中包含项目作用 + 一个数字</p>
+        </div>
+        <div class="card blk tip">💡 轻提示:试着加入一个数字,比如 30%、2 weeks、100 users。</div>
+        <div class="card blk">
+          <span class="label">实时成长指标</span>
+          <div class="metric"><span>结构表达</span><span class="bar"><i style="width:80%"></i></span></div>
+          <div class="metric"><span>结果量化</span><span class="bar"><i style="width:35%;background:var(--bee)"></i></span></div>
+          <div class="metric"><span>流利度</span><span class="bar"><i style="width:70%"></i></span></div>
+        </div>
+        <div class="card blk checklist">
+          <span class="label">本轮状态</span>
+          <div class="c"><span class="dot done"></span> 场景目标:已设定</div>
+          <div class="c"><span class="dot active"></span> 实时语音对话:进行中</div>
+          <div class="c"><span class="dot"></span> 发音评测:待生成</div>
+          <div class="c"><span class="dot"></span> 表达纠错:待生成</div>
+          <div class="c"><span class="dot"></span> 课后总结:待生成</div>
+        </div>
+        <div class="tech">🟢 语音链路正常 <span style="float:right;color:var(--macaw)">展开 ▾</span><br/>
+          <span style="font-weight:600;color:var(--hare)">ASR 0.8s · LLM 1.2s · TTS 0.7s</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= REPORT ================= -->
+  <div class="wrap screen" id="report">
+    <div class="rp-grid">
+      <div class="score-hero">
+        <div><div class="score-num">76</div><div style="font-weight:800">/ 100</div></div>
+        <div>
+          <span class="label" style="color:rgba(255,255,255,.85)">本次练习 · AI 产品经理面试 · 5 分 18 秒 · 8 轮</span>
+          <h2 style="margin-top:6px">你已经能清楚说明项目背景和职责 👏</h2>
+          <p style="margin-top:6px;font-weight:700">完成目标:用英文讲清楚一个项目 ✅</p>
+        </div>
+      </div>
+
+      <div class="card dims">
+        <span class="label">五维能力</span>
+        <div class="dim"><div class="t"><span>发音清晰度</span><span>82</span></div><div class="bar" style="width:100%"><i style="width:82%"></i></div></div>
+        <div class="dim"><div class="t"><span>流利度</span><span>74</span></div><div class="bar" style="width:100%"><i style="width:74%"></i></div></div>
+        <div class="dim"><div class="t"><span>语法</span><span>71</span></div><div class="bar" style="width:100%"><i style="width:71%"></i></div></div>
+        <div class="dim"><div class="t"><span>词汇</span><span>78</span></div><div class="bar" style="width:100%"><i style="width:78%"></i></div></div>
+        <div class="dim"><div class="t"><span>互动完成度</span><span>69</span></div><div class="bar" style="width:100%"><i style="width:69%;background:var(--bee)"></i></div></div>
+      </div>
+
+      <div class="card fix">
+        <span class="label">最值得改的一句</span>
+        <p class="orig" style="margin-top:8px">Original: I improved the route flow.</p>
+        <p class="better">Better: I optimized the route planning experience and reduced route search time by 30%.</p>
+        <p class="reason">原因:“route planning experience” 更自然,“30%” 让你的成果可衡量。</p>
+      </div>
+
+      <div class="card">
+        <span class="label">下一轮只练一件事</span>
+        <p style="font-weight:800;font-size:18px;margin-top:8px;color:var(--feather-green)">回答项目成果时,至少加入一个数字。</p>
+        <p class="muted" style="font-size:14px;margin-top:6px">不是说更多,而是说准一个数字。</p>
+        <span class="label" style="display:block;margin-top:16px">推荐复练句</span>
+        <ul class="replay">
+          <li>I optimized the route planning experience and reduced route search time by 30%.</li>
+          <li>This project improved user navigation efficiency.</li>
+          <li>My main contribution was designing the route interaction flow.</li>
+        </ul>
+      </div>
+
+      <div class="encourage">🌱 你已经能说明项目大意,但结果表达还不够具体。下一轮重点不是说更多,而是说准一个数字。继续保持!</div>
+    </div>
+  </div>
+
+<script>
+  function show(id,el){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    el.classList.add('active');
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+</script>
+</body>
+</html>
