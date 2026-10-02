@@ -53,3 +53,6 @@ artifacts/
 
 # Log layanan TTS lokal
 tts_service/_server.log
+
+# Metadata asisten/agen (catatan kerja lokal, bukan bagian produk)
+.workbuddy-ai/
