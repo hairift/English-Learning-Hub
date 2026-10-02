@@ -10,6 +10,7 @@
     "dev:client": "vite --host 127.0.0.1",
     "dev:tts": "node scripts/start-tts.mjs",
     "build": "tsc -p tsconfig.json && vite build",
+    "start": "tsx server/production.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -32,6 +33,7 @@
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "three": "^0.186.1",
+    "tsx": "^4.21.0",
     "zod": "^4.2.0"
   },
   "devDependencies": {
@@ -44,7 +46,6 @@
     "@types/supertest": "^6.0.3",
     "concurrently": "^9.2.1",
     "supertest": "^7.1.4",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^7.2.6",
     "vitest": "^4.0.15"

@@ -367,18 +367,27 @@
   text-align: left;
 }
 
+/*
+ * Judul kartu skenario WAJIB dipaksa putih: aturan global `h1, h2, h3`
+ * memakai warna gelap dan akan menang atas pewarisan `color` dari
+ * `.scene-card`, sehingga tanpa aturan ini teks judul nyaris tak terbaca
+ * di atas gradasi biru/ungu.
+ */
 .scene-card h3 {
   margin: 0;
+  color: #fff;
   font-size: 20px;
   font-weight: 900;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
 }
 
-.scene-meta {
+.scene-card .scene-meta {
   margin-top: 6px;
+  color: rgba(255, 255, 255, 0.96);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.6;
-  opacity: 0.95;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
 .scene-go {
@@ -399,6 +408,13 @@
   background: #fff;
   color: var(--eel);
   text-align: center;
+}
+
+/* Kartu kustom berlatar putih: judul & meta harus kembali gelap. */
+.scene-card.custom h3,
+.scene-card.custom .scene-meta {
+  color: var(--eel);
+  text-shadow: none;
 }
 
 .scene-card.custom .plus {
@@ -3859,6 +3875,13 @@ body:has(.one-report) .api-pill {
   font-weight: 900;
 }
 
+/* Ikon tren sejajar dengan teks agar tidak saling menumpuk. */
+.growth-trail-card .growth-trail-trend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .growth-trail-button {
   min-height: 40px;
   border: 2px solid var(--feather-green);
@@ -3920,6 +3943,50 @@ body:has(.one-report) .api-pill {
   line-height: 1.45;
 }
 
+/* Penanda bahwa mikrofon sedang merekam berkelanjutan. */
+.mic-live-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  border: 2px solid rgba(31, 122, 224, 0.35);
+  border-radius: 14px;
+  padding: 9px 12px;
+  background: rgba(31, 122, 224, 0.08);
+  color: var(--biru-gelap);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.mic-live-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #e5484d;
+  box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.6);
+  animation: mic-denyut 1.4s ease-out infinite;
+}
+
+@keyframes mic-denyut {
+  0% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgba(229, 72, 77, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mic-live-dot {
+    animation: none;
+  }
+}
+
 @keyframes spark-burn {
   0%,
   100% {
@@ -3969,8 +4036,12 @@ body:has(.one-report) .api-pill {
 }
 
 .scene-card h3 {
-  font-size: 26px;
-  letter-spacing: 0;
+  color: #fff;
+  font-size: 22px;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
 }
 
 .scene-tags {
@@ -3983,9 +4054,11 @@ body:has(.one-report) .api-pill {
 .scene-tags span {
   border-radius: 999px;
   padding: 3px 10px;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
   font-size: 11px;
   font-weight: 900;
+  text-shadow: none;
 }
 
 .scene-card.custom {

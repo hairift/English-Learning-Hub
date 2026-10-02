@@ -22,10 +22,10 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CoachState, ConversationTurn, PracticeSession, ReportResult } from "../shared/schemas";
+import type { CoachState, ConversationTurn, PracticeSession, ReportResult, SpeechAudioResult } from "../shared/schemas";
 import { deteksiBahasa, normalisasiTeksEn, normalisasiTeksId } from "../shared/textNormalizer";
 import type { Scenario } from "../server/data";
-import { api, checkPipecatHealth, createPipecatOfferUrl, type HealthResult } from "./api";
+import { api, checkPipecatHealth, createPipecatOfferUrl, pipecatDiaktifkan, type HealthResult } from "./api";
 import { ApiSettingsPanel } from "./components/ApiSettingsPanel";
 import { BrandTopBar } from "./components/BrandGuidelines";
 import { CoachAvatar } from "./components/CoachAvatar";
@@ -33,7 +33,7 @@ import { ReportDashboard } from "./components/ReportDashboard";
 import { WeekDots } from "./components/WeekDots";
 import { VALUE_CARDS } from "./copy/coachCopy";
 import { getShanghaiDate, type CheckinState } from "./domain/checkin";
-import { GROWTH_MOCK } from "./domain/growthMock";
+import { ringkasanProgres } from "./domain/growth";
 import {
   completeToday,
   loadCheckin,
@@ -59,7 +59,10 @@ import {
   daftarkanElemenAudio,
   daftarkanStreamAudio,
   lepasSemuaSumberAudio,
-  lepasSumberAudio
+  lepasSumberAudio,
+  pasangPembukaAudio,
+  pastikanKonteksBerjalan,
+  siapkanKonteksAudio
 } from "./lipsync/audioAnalyser";
 import { mulaiVisemeDariTeks } from "./lipsync/visemeDariTeks";
 
@@ -105,6 +108,13 @@ const defaultCustomForm: CustomScenarioForm = {
   openingQuestion: "Could you explain the value of your project in one minute?"
 };
 
+/**
+ * Jeda hening (ms) sebelum jawaban lisan dikirim otomatis.
+ * Cukup panjang agar pengguna tidak terpotong saat mengambil napas,
+ * cukup pendek agar percakapan tetap terasa mengalir.
+ */
+const JEDA_KIRIM_OTOMATIS_MS = 1600;
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [health, setHealth] = useState<HealthResult | null>(null);
@@ -128,6 +138,14 @@ export default function App() {
   const [userAnswerText, setUserAnswerText] = useState("");
   const [isListeningMic, setIsListeningMic] = useState(false);
   const recognitionRef = useRef<any>(null);
+  /** True selama pengguna menginginkan mikrofon tetap aktif (mode rekam berkelanjutan). */
+  const micAktifRef = useRef(false);
+  /** Transkrip yang sudah dikunci sebagai hasil final (agar tidak hilang saat rekaman dimulai ulang). */
+  const transkripFinalRef = useRef("");
+  /** Timer pengiriman otomatis jawaban setelah pengguna berhenti bicara. */
+  const timerKirimOtomatisRef = useRef<number | null>(null);
+  /** Cache audio TTS per teks supaya kalimat berulang diputar seketika. */
+  const cacheTtsRef = useRef(new Map<string, SpeechAudioResult>());
   const voiceClientRef = useRef<PipecatVoiceClient | null>(null);
   const countdownRef = useRef<number | null>(null);
   const recordedTurnKeysRef = useRef(new Set<string>());
@@ -136,10 +154,14 @@ export default function App() {
   const previousTurnCountRef = useRef(0);
   const [transcriptPinnedToLatest, setTranscriptPinnedToLatest] = useState(true);
   const [unseenTurnCount, setUnseenTurnCount] = useState(0);
+  /** Tanggal hari ini menurut zona Asia/Shanghai; diperbarui berkala agar tetap realtime. */
+  const [hariIni, setHariIni] = useState(() => getShanghaiDate());
 
-  const todayDone = checkin.completedDates.includes(getShanghaiDate());
+  const todayDone = checkin.completedDates.includes(hariIni);
   const learningSummary = useMemo(() => summarizeLearning(learning), [learning]);
   const latestLearningRecord = learning.records[0] ?? null;
+  /** Ringkasan Progres Belajar — dihitung dari data latihan nyata, bukan contoh. */
+  const progres = useMemo(() => ringkasanProgres(learning, checkin, hariIni), [learning, checkin, hariIni]);
   const userTurnCount = conversationTurns.filter((turn) => turn.speaker === "user").length;
   const practiceCopy = useMemo(
     () => getPracticeExperienceCopy({ status: practiceStatus, busy, error: startError }),
@@ -194,8 +216,29 @@ export default function App() {
       if (countdownRef.current) {
         window.clearInterval(countdownRef.current);
       }
+      if (timerKirimOtomatisRef.current !== null) {
+        window.clearTimeout(timerKirimOtomatisRef.current);
+      }
       lepasSemuaSumberAudio();
     };
+  }, []);
+
+  /**
+   * Buka mesin audio (AudioContext) pada interaksi pertama pengguna.
+   *
+   * Browser memblokir pemutaran audio sebelum ada gesture. Tanpa ini,
+   * AudioContext tetap "suspended", analisis audio tidak pernah berjalan,
+   * dan mulut avatar 3D tidak ikut bergerak saat Sela berbicara.
+   */
+  useEffect(() => pasangPembukaAudio(), []);
+
+  /** Segarkan tanggal setiap menit supaya progres & rentetan tetap realtime melewati tengah malam. */
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const tanggalTerbaru = getShanghaiDate();
+      setHariIni((sebelumnya) => (sebelumnya === tanggalTerbaru ? sebelumnya : tanggalTerbaru));
+    }, 60_000);
+    return () => window.clearInterval(id);
   }, []);
 
   useLayoutEffect(() => {
@@ -345,9 +388,17 @@ export default function App() {
   const lipsyncSourceRef = useRef<string | null>(null);
   /** Penghenti animasi mulut berbasis teks (mode cadangan). */
   const stopVisemeTeksRef = useRef<(() => void) | null>(null);
+  /** Nomor generasi pemutaran suara; naik setiap kali suara dihentikan. */
+  const generasiSuaraRef = useRef(0);
+  /** Menyelesaikan penantian pemutaran audio yang sedang berjalan (dipakai saat dibatalkan). */
+  const pembatalSuaraRef = useRef<(() => void) | null>(null);
 
   /** Menghentikan seluruh sumber suara & lip sync yang sedang berjalan. */
   function hentikanSumberSuara() {
+    // Naikkan generasi supaya antrean potongan suara yang sedang berjalan berhenti.
+    generasiSuaraRef.current += 1;
+    pembatalSuaraRef.current?.();
+    pembatalSuaraRef.current = null;
     stopVisemeTeksRef.current?.();
     stopVisemeTeksRef.current = null;
     lepasSumberAudio(lipsyncSourceRef.current);
@@ -359,6 +410,58 @@ export default function App() {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
+  }
+
+  /**
+   * Pecah teks menjadi potongan kalimat yang tidak terlalu panjang.
+   *
+   * Tujuannya menekan latensi yang terasa: kalimat pertama bisa mulai
+   * diputar setelah ~1 kalimat disintesis, bukan menunggu seluruh paragraf.
+   */
+  function pecahKalimat(teks: string): string[] {
+    const bersih = teks.replace(/\s+/g, " ").trim();
+    if (!bersih) return [];
+    const kalimat = bersih
+      .split(/(?<=[.!?])\s+/)
+      .map((bagian) => bagian.trim())
+      .filter(Boolean);
+    if (kalimat.length <= 1) return [bersih];
+
+    // Gabungkan kalimat pendek agar jumlah permintaan TTS tidak berlebihan.
+    const hasil: string[] = [];
+    let gabung = "";
+    for (const bagian of kalimat) {
+      const kandidat = gabung ? `${gabung} ${bagian}` : bagian;
+      if (kandidat.length <= 140) {
+        gabung = kandidat;
+      } else {
+        if (gabung) hasil.push(gabung);
+        gabung = bagian;
+      }
+    }
+    if (gabung) hasil.push(gabung);
+    return hasil;
+  }
+
+  /** Log diagnostik opt-in: hanya aktif bila `window.__SELA_DEBUG__` diset. */
+  function debugSuara(pesan: string, data?: unknown) {
+    if (typeof window !== "undefined" && (window as unknown as { __SELA_DEBUG__?: boolean }).__SELA_DEBUG__) {
+      console.info(`[sela-suara] ${pesan}`, data ?? "");
+    }
+  }
+
+  /** Ambil audio TTS sebuah teks dari cache klien, atau minta ke backend. */
+  async function ambilAudioTts(teks: string): Promise<SpeechAudioResult | null> {
+    const tersimpan = cacheTtsRef.current.get(teks);
+    if (tersimpan) return tersimpan;
+
+    const hasil = await api.synthesize(teks).catch(() => null);
+    if (hasil?.audioBase64) {
+      // Batasi ukuran cache agar memori tetap wajar.
+      if (cacheTtsRef.current.size >= 40) cacheTtsRef.current.clear();
+      cacheTtsRef.current.set(teks, hasil);
+    }
+    return hasil;
   }
 
   /**
@@ -391,46 +494,128 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   }
 
-  /** Mengucapkan teks AI memakai TTS (Supertonic secara default) + lip sync. */
+  /**
+   * Mengucapkan teks AI memakai TTS (Supertonic secara default) + lip sync.
+   *
+   * Tiga cara latensi ditekan:
+   * 1. Teks dipecah per kalimat, sehingga suara mulai terdengar setelah kalimat
+   *    pertama selesai disintesis (tidak menunggu seluruh paragraf).
+   * 2. Cache sisi klien — kalimat yang sama (sapaan, umpan balik berulang)
+   *    diputar seketika tanpa memanggil server lagi.
+   * 3. AudioContext dibuka lebih awal lewat gesture pengguna sehingga audio
+   *    langsung bisa dianalisis dan mulut 3D ikut bergerak.
+   */
   async function speakText(text: string) {
-    if (!text.trim()) return;
+    const teksBersih = text.trim();
+    if (!teksBersih) return;
+
+    setPracticeStatus("speaking");
+    setCoachState("asking");
+
+    hentikanSumberSuara();
+    // Pastikan mesin audio siap sebelum elemen audio dibuat.
+    siapkanKonteksAudio();
+    const generasi = generasiSuaraRef.current;
+
+    const potongan = pecahKalimat(teksBersih);
+    if (potongan.length === 0) return;
+
     try {
-      setPracticeStatus("speaking");
-      setCoachState("asking");
+      // Mesin audio harus benar-benar berjalan: menyambungkan elemen ke graf
+      // Web Audio saat konteks "suspended" akan membuat suara senyap.
+      const siapDianalisis = await pastikanKonteksBerjalan();
+      debugSuara("konteks-audio", { siapDianalisis, potongan: potongan.length });
 
-      hentikanSumberSuara();
+      for (let i = 0; i < potongan.length; i += 1) {
+        if (generasi !== generasiSuaraRef.current) return;
 
-      // Panggil TTS backend (default: Supertonic, fleksibel Indonesia & Inggris).
-      const res = await api.synthesize(text).catch(() => null);
-      if (res && res.audioBase64) {
+        const res = await ambilAudioTts(potongan[i]);
+        if (generasi !== generasiSuaraRef.current) return;
+        if (!res?.audioBase64) throw new Error("audio-tts-tidak-tersedia");
+
         const audio = new Audio(`data:audio/${res.format || "mp3"};base64,${res.audioBase64}`);
         audioPlayerRef.current = audio;
-        // Sambungkan ke analiser lip sync (aman: gagal -> mulut diam).
-        lipsyncSourceRef.current = daftarkanElemenAudio(audio);
-        audio.onended = () => {
-          lepasSumberAudio(lipsyncSourceRef.current);
-          lipsyncSourceRef.current = null;
-          setPracticeStatus("listening");
-          setCoachState("listening");
-        };
-        audio.onerror = () => {
-          fallbackSpeechSynthesis(text);
-        };
-        await audio.play();
-        return;
+
+        // Setiap potongan punya elemennya sendiri, jadi masing-masing perlu
+        // didaftarkan ke analiser lip sync agar mulut tetap bergerak.
+        const idSumber = siapDianalisis ? daftarkanElemenAudio(audio, `tts-${generasi}-${i}`) : null;
+        lipsyncSourceRef.current = idSumber;
+        debugSuara("putar-potongan", { i, idSumber, format: res.format, byte: res.audioBase64.length });
+
+        await new Promise<void>((selesai, gagal) => {
+          pembatalSuaraRef.current = () => selesai();
+          audio.onended = () => {
+            pembatalSuaraRef.current = null;
+            selesai();
+          };
+          audio.onerror = () => {
+            pembatalSuaraRef.current = null;
+            gagal(new Error("pemutaran-audio-gagal"));
+          };
+          void audio.play().catch(gagal);
+        });
+
+        lepasSumberAudio(idSumber);
+        lipsyncSourceRef.current = null;
       }
-    } catch {
-      // Kebijakan autoplay atau galat jaringan: lanjut ke cadangan.
+
+      if (generasi !== generasiSuaraRef.current) return;
+      setPracticeStatus("listening");
+      setCoachState("listening");
+    } catch (err) {
+      debugSuara("gagal-ke-cadangan", err instanceof Error ? err.message : String(err));
+      // Dibatalkan oleh ucapan baru, atau TTS/autoplay gagal: pakai cadangan.
+      if (generasi !== generasiSuaraRef.current) return;
+      fallbackSpeechSynthesis(text);
     }
-    fallbackSpeechSynthesis(text);
   }
 
-  function toggleMic() {
-    if (isListeningMic) {
-      recognitionRef.current?.stop();
-      setIsListeningMic(false);
-      return;
+  /** Batalkan timer pengiriman otomatis (mis. saat pengguna menekan Kirim manual). */
+  function batalkanKirimOtomatis() {
+    if (timerKirimOtomatisRef.current !== null) {
+      window.clearTimeout(timerKirimOtomatisRef.current);
+      timerKirimOtomatisRef.current = null;
     }
+  }
+
+  /**
+   * Jadwalkan pengiriman jawaban otomatis setelah pengguna berhenti bicara.
+   * Dipanggil ulang setiap kali ada hasil transkrip final baru, sehingga
+   * timer selalu di-reset selama pengguna masih berbicara.
+   */
+  function jadwalkanKirimOtomatis() {
+    batalkanKirimOtomatis();
+    timerKirimOtomatisRef.current = window.setTimeout(() => {
+      timerKirimOtomatisRef.current = null;
+      const teks = (transkripFinalRef.current || userAnswerText).trim();
+      if (!teks || practiceStatus === "thinking") return;
+      hentikanMikrofon();
+      void submitUserTurn(teks);
+    }, JEDA_KIRIM_OTOMATIS_MS);
+  }
+
+  /** Hentikan perekaman mikrofon dan bersihkan timer. */
+  function hentikanMikrofon() {
+    micAktifRef.current = false;
+    batalkanKirimOtomatis();
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      // Menghentikan rekaman yang sudah mati bukan masalah.
+    }
+    recognitionRef.current = null;
+    setIsListeningMic(false);
+  }
+
+  /**
+   * Mulai merekam dengan Web Speech Recognition.
+   *
+   * `continuous = true` + pemulaian ulang di `onend` membuat perekaman tidak
+   * berhenti sendiri setelah beberapa kata (masalah "cuma terekam sampai
+   * hello test test"). Hasil final diakumulasi di `transkripFinalRef` agar
+   * tidak hilang ketika Chrome memulai sesi rekaman baru.
+   */
+  function mulaiMikrofon() {
     const SpeechRecognition =
       (window as unknown as { SpeechRecognition?: any }).SpeechRecognition ||
       (window as unknown as { webkitSpeechRecognition?: any }).webkitSpeechRecognition;
@@ -443,25 +628,76 @@ export default function App() {
     }
 
     try {
+      // Membuka AudioContext pada gesture ini sekaligus (lihat pasangPembukaAudio).
+      siapkanKonteksAudio();
+
       const recognition = new SpeechRecognition();
       recognition.lang = "en-US";
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
       recognition.onstart = () => setIsListeningMic(true);
+
       recognition.onresult = (event: any) => {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          transcript += event.results[i][0].transcript;
+        let finalBaru = "";
+        let sementara = "";
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          const hasil = event.results[i];
+          const teks = hasil[0]?.transcript ?? "";
+          if (hasil.isFinal) finalBaru += teks;
+          else sementara += teks;
         }
-        setUserAnswerText(transcript);
+        if (finalBaru) {
+          transkripFinalRef.current = `${transkripFinalRef.current} ${finalBaru}`.replace(/\s+/g, " ").trim();
+        }
+        setUserAnswerText(`${transkripFinalRef.current} ${sementara}`.replace(/\s+/g, " ").trim());
+        // Reset timer hening hanya saat ada kata yang benar-benar selesai.
+        if (finalBaru) jadwalkanKirimOtomatis();
       };
-      recognition.onerror = () => setIsListeningMic(false);
-      recognition.onend = () => setIsListeningMic(false);
+
+      recognition.onerror = (event: any) => {
+        // "no-speech" & "aborted" bukan galat fatal: biarkan sesi rekaman lanjut.
+        if (event?.error === "no-speech" || event?.error === "aborted") return;
+        hentikanMikrofon();
+      };
+
+      recognition.onend = () => {
+        // Chrome mengakhiri sesi setelah jeda; mulai ulang selama pengguna
+        // belum menekan tombol berhenti agar rekaman tetap utuh.
+        if (micAktifRef.current) {
+          try {
+            recognition.start();
+            return;
+          } catch {
+            // Gagal memulai ulang (mis. izin dicabut): tandai mikrofon berhenti.
+          }
+        }
+        setIsListeningMic(false);
+      };
+
       recognitionRef.current = recognition;
+      micAktifRef.current = true;
+      transkripFinalRef.current = "";
       recognition.start();
     } catch {
-      setIsListeningMic(false);
+      hentikanMikrofon();
     }
+  }
+
+  /**
+   * Tombol mikrofon: mulai merekam, atau berhenti lalu langsung kirim.
+   * Menekan tombol saat merekam = "saya sudah selesai" sehingga jawaban
+   * dikirim tanpa perlu menekan tombol Kirim lagi.
+   */
+  function toggleMic() {
+    if (isListeningMic || micAktifRef.current) {
+      const teks = (transkripFinalRef.current || userAnswerText).trim();
+      hentikanMikrofon();
+      if (teks) void submitUserTurn(teks);
+      return;
+    }
+    mulaiMikrofon();
   }
 
   async function submitUserTurn(textToSend?: string) {
@@ -515,6 +751,60 @@ export default function App() {
     }
   }
 
+  /**
+   * Hubungkan ke layanan suara real-time Pipecat (opsional, hanya dipakai
+   * bila `VITE_PIPECAT_BASE_URL` diset). Bila gagal, otomatis jatuh ke TTS
+   * backend / speech synthesis browser sehingga latihan tetap berjalan.
+   */
+  async function hubungkanPipecat(started: Awaited<ReturnType<typeof api.startSession>>) {
+    try {
+      await checkPipecatHealth();
+      setBusy("Membuka koneksi suara langsung...");
+      const client = createPipecatVoiceClient({
+        webrtcUrl: createPipecatOfferUrl({
+          sessionId: started.sessionId,
+          scenarioId: scenario.id,
+          taskId: task.id,
+          targetGoal: task.focus,
+          openingText: started.aiText
+        }),
+        callbacks: {
+          onStatus: updatePracticeStatusFromPipecat,
+          onBotAudioStream: (stream: MediaStream) => {
+            // Sambungkan audio bot ke lip sync agar mulut 3D ikut bergerak.
+            lipsyncSourceRef.current = daftarkanStreamAudio(stream);
+          },
+          onBotAudioStreamEnded: () => {
+            // Audio bot berhenti: hentikan analisis agar mulut kembali diam.
+            lepasSumberAudio(lipsyncSourceRef.current);
+            lipsyncSourceRef.current = null;
+          },
+          onTurn: (turn) => {
+            void recordVoiceTurn(turn, started.sessionId).catch((error) => {
+              setStartError(error instanceof Error ? error.message : "Gagal mencatat percakapan.");
+            });
+          },
+          onError: (message) => {
+            setStartError(mapPracticeStartError(new Error(message)));
+            setBusy("");
+            setPracticeStatus((current) => (current === "connecting" ? "idle" : current));
+            setCoachState((current) => (current === "thinking" ? "idle" : current));
+          },
+          onDisconnected: () => {
+            setBusy("");
+            setPracticeStatus((current) => (current === "completed" ? current : "ended"));
+            setCoachState("reviewing");
+          }
+        }
+      });
+      voiceClientRef.current = client;
+      await client.connect();
+    } catch {
+      // Cadangan: pakai TTS backend / speech synthesis browser.
+      void speakText(started.aiText);
+    }
+  }
+
   async function startConversation() {
     setBusy("Mempersiapkan sesi latihan...");
     setStartError("");
@@ -545,51 +835,13 @@ export default function App() {
       setRemainingSeconds(started.remainingSeconds);
       startCountdown(started.remainingSeconds, started.sessionId);
 
-      // Periksa apakah layanan Pipecat (suara real-time) sedang berjalan.
-      try {
-        await checkPipecatHealth();
-        setBusy("Membuka koneksi suara langsung...");
-        const client = createPipecatVoiceClient({
-          webrtcUrl: createPipecatOfferUrl({
-            sessionId: started.sessionId,
-            scenarioId: scenario.id,
-            taskId: task.id,
-            targetGoal: task.focus,
-            openingText: started.aiText
-          }),
-          callbacks: {
-            onStatus: updatePracticeStatusFromPipecat,
-            onBotAudioStream: (stream: MediaStream) => {
-              // Sambungkan audio bot ke lip sync agar mulut 3D ikut bergerak.
-              lipsyncSourceRef.current = daftarkanStreamAudio(stream);
-            },
-            onBotAudioStreamEnded: () => {
-              // Audio bot berhenti: hentikan analisis agar mulut kembali diam.
-              lepasSumberAudio(lipsyncSourceRef.current);
-              lipsyncSourceRef.current = null;
-            },
-            onTurn: (turn) => {
-              void recordVoiceTurn(turn, started.sessionId).catch((error) => {
-                setStartError(error instanceof Error ? error.message : "Gagal mencatat percakapan.");
-              });
-            },
-            onError: (message) => {
-              setStartError(mapPracticeStartError(new Error(message)));
-              setBusy("");
-              setPracticeStatus((current) => (current === "connecting" ? "idle" : current));
-              setCoachState((current) => (current === "thinking" ? "idle" : current));
-            },
-            onDisconnected: () => {
-              setBusy("");
-              setPracticeStatus((current) => (current === "completed" ? current : "ended"));
-              setCoachState("reviewing");
-            }
-          }
-        });
-        voiceClientRef.current = client;
-        await client.connect();
-      } catch {
-        // Cadangan: pakai TTS backend / speech synthesis browser.
+      // Pipecat bersifat OPSIONAL. Bila `VITE_PIPECAT_BASE_URL` tidak
+      // dikonfigurasi, jangan pernah menghubungi http://127.0.0.1:7860 —
+      // permintaan itu selalu gagal dan mengotori konsol dengan
+      // ERR_CONNECTION_REFUSED. Cukup gunakan TTS backend.
+      if (pipecatDiaktifkan()) {
+        await hubungkanPipecat(started);
+      } else {
         void speakText(started.aiText);
       }
 
@@ -612,8 +864,7 @@ export default function App() {
     if (!activeSessionId) return;
     setBusy("Menutup sesi latihan...");
     hentikanSumberSuara();
-    recognitionRef.current?.stop();
-    setIsListeningMic(false);
+    hentikanMikrofon();
     await voiceClientRef.current?.disconnect().catch(() => null);
     voiceClientRef.current = null;
     lepasSemuaSumberAudio();
@@ -645,12 +896,13 @@ export default function App() {
     setLearning(
       recordLearning(
         createLearningRecord({
-          date: getShanghaiDate(),
+          date: hariIni,
           scenarioNameZh: scenario.nameZh,
           scenarioNameEn: scenario.nameEn,
           taskTitleZh: task.titleZh,
           focus: task.focus,
           roundCount: userTurnCount,
+          durationMinutes: selectedDurationMinutes,
           report: result
         })
       )
@@ -799,14 +1051,16 @@ export default function App() {
                 <span className="eyebrow">Progres Belajar</span>
                 <div className="streak-headline">
                   <span>Latihan Beruntun</span>
-                  <strong>{GROWTH_MOCK.streakDays} Hari</strong>
+                  <strong>{progres.streakDays} Hari</strong>
                 </div>
                 <div className="spark-status-row" aria-label="Status Semangat">
                   <div className="spark-chip spark-chip-burning">
                     <span className="spark-flame" aria-hidden="true" />
                     <div>
-                      <strong>Streak Aktif</strong>
-                      <span>Hari ke-{GROWTH_MOCK.streakDays}</span>
+                      <strong>{progres.streakDays > 0 ? "Streak Aktif" : "Belum Ada Streak"}</strong>
+                      <span>
+                        {progres.streakDays > 0 ? `Hari ke-${progres.streakDays}` : "Mulai hari ini"}
+                      </span>
                     </div>
                   </div>
                   <div className="spark-chip spark-chip-freeze">
@@ -814,31 +1068,39 @@ export default function App() {
                       <span />
                     </span>
                     <div>
-                      <strong>Streak Freeze</strong>
-                      <span>1x Tersedia</span>
+                      <strong>Sesi Minggu Ini</strong>
+                      <span>{progres.sessionsThisWeek} dari 7 hari</span>
                     </div>
                   </div>
                 </div>
                 <div className="week-check-row" aria-label="Progres Latihan Mingguan">
-                  {["Sen", "Sel", "Rab"].map((day) => (
-                    <span className="done" key={day}>
-                      {day}
+                  {progres.week.map((hari) => (
+                    <span
+                      className={hari.hariIni ? "today" : hari.selesai ? "done" : undefined}
+                      key={hari.tanggal}
+                      title={hari.tanggal}
+                    >
+                      {hari.label}
                     </span>
                   ))}
-                  <span className="today">Hari Ini</span>
-                  {["Jum", "Sab", "Min"].map((day) => (
-                    <span key={day}>{day}</span>
-                  ))}
                 </div>
-                <div className="streak-reward">Pertahankan semangatmu, sudah 3 hari berturut-turut!</div>
+                <div className="streak-reward">{progres.pesan}</div>
                 <div className="growth-metrics">
                   <div>
                     <span>Total Latihan</span>
-                    <strong>{GROWTH_MOCK.totalMinutes} Menit</strong>
+                    <strong>{progres.totalMinutes} Menit</strong>
                   </div>
                   <div>
                     <span>Skor Terakhir</span>
-                    <strong>{GROWTH_MOCK.lastScore}</strong>
+                    <strong>{progres.lastScore ?? "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Total Sesi</span>
+                    <strong>{progres.totalSessions}</strong>
+                  </div>
+                  <div>
+                    <span>Rata-rata Skor</span>
+                    <strong>{progres.averageScore ?? "—"}</strong>
                   </div>
                 </div>
                 <div className="growth-trail-card">
@@ -846,9 +1108,13 @@ export default function App() {
                     <span className="growth-trail-label">Jejak Perkembangan</span>
                     <strong className="growth-trail-trend">
                       <TrendingUp size={16} aria-hidden="true" />
-                      68 → 72 → 76
+                      {progres.trend.length >= 2 ? progres.trend.join(" → ") : "Belum ada tren"}
                     </strong>
-                    <p>Sedang diasah: {GROWTH_MOCK.weakAreaZh}</p>
+                    <p>
+                      {progres.adaData
+                        ? `Sedang diasah: ${progres.weakArea}`
+                        : "Selesaikan latihan pertama untuk melihat area yang perlu diasah."}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -859,9 +1125,15 @@ export default function App() {
                   </button>
                 </div>
                 <div className="next-target home-next-practice">
-                  Latihan Berikutnya: {GROWTH_MOCK.nextPracticeZh}
-                  <br />
-                  Fokuskan pada "{GROWTH_MOCK.weakAreaZh}", sebutkan hasil nyata lalu sertakan angka.
+                  {progres.adaData ? (
+                    <>
+                      Latihan Berikutnya: {progres.lastScenario}
+                      <br />
+                      Fokuskan pada "{progres.weakArea}", sebutkan hasil nyata lalu sertakan angka.
+                    </>
+                  ) : (
+                    <>Latihan Berikutnya: pilih satu skenario lalu selesaikan sesi 5 menit pertamamu.</>
+                  )}
                 </div>
               </section>
             </div>
@@ -1024,7 +1296,11 @@ export default function App() {
                         type="button"
                         className={`mic-toggle-btn ${isListeningMic ? "listening" : ""}`}
                         onClick={toggleMic}
-                        title={isListeningMic ? "Klik untuk berhenti merekam" : "Klik untuk bicara dalam bahasa Inggris"}
+                        title={
+                          isListeningMic
+                            ? "Klik untuk berhenti dan kirim jawaban sekarang"
+                            : "Klik untuk bicara dalam bahasa Inggris (terkirim otomatis saat kamu berhenti)"
+                        }
                       >
                         <Mic size={18} />
                         {isListeningMic ? "Mendengarkan..." : "Bicara (Mic)"}
@@ -1045,6 +1321,13 @@ export default function App() {
                         Kirim
                       </button>
                     </form>
+
+                    {isListeningMic && (
+                      <div className="mic-live-hint" role="status">
+                        <span className="mic-live-dot" aria-hidden="true" />
+                        Mendengarkan sampai kamu benar-benar selesai bicara — jawaban terkirim otomatis setelah jeda hening.
+                      </div>
+                    )}
 
                     <div className="quick-prompts-row">
                       <span className="quick-prompts-label">Contoh Jawaban / Quick Responses:</span>

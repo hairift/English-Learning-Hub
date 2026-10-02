@@ -234,9 +234,29 @@ export const api = {
     })
 };
 
-export async function checkPipecatHealth() {
+/**
+ * True bila layanan suara real-time Pipecat dikonfigurasi secara eksplisit.
+ *
+ * Pipecat bersifat opsional. Bila `VITE_PIPECAT_BASE_URL` tidak diisi, kita
+ * tidak boleh mencoba menghubungi http://127.0.0.1:7860 karena permintaan itu
+ * selalu gagal (ERR_CONNECTION_REFUSED) dan hanya mengotori konsol.
+ */
+export function pipecatDiaktifkan(): boolean {
+  return Boolean(import.meta.env.VITE_PIPECAT_BASE_URL);
+}
+
+export async function checkPipecatHealth(timeoutMs = 1500) {
   const baseUrl = import.meta.env.VITE_PIPECAT_BASE_URL || "http://127.0.0.1:7860";
-  const response = await fetch(new URL("/health", baseUrl));
+  const pembatal = new AbortController();
+  const timer = setTimeout(() => pembatal.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(new URL("/health", baseUrl), { signal: pembatal.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+
   if (!response.ok) {
     throw new Error(`Pipecat health check failed: ${response.status} ${response.statusText}`);
   }

@@ -246,7 +246,7 @@ export function getConfig(options: AppOptions = {}): LiveConfig {
       (ttsProvider === "supertonic" ? SUARA_SUPERTONIC_DEFAULT : undefined),
     ttsLanguageMode: readModeBahasa(process.env.TTS_LANGUAGE_MODE, "auto"),
     ttsSpeed: readNumber(process.env.TTS_SPEED, 1),
-    ttsSteps: readNumber(process.env.TTS_STEPS, 8),
+    ttsSteps: readNumber(process.env.TTS_STEPS, 6),
     ttsServiceUrl: URL_LAYANAN_TTS_DEFAULT,
     cartesiaApiKey: process.env.CARTESIA_API_KEY || process.env.TTS_API_KEY,
     cartesiaVersion: process.env.CARTESIA_VERSION || process.env.TTS_VERSION || preset.ttsVersion,

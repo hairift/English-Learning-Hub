@@ -91,3 +91,22 @@ export function setelLipsyncDiam() {
 export function kedipkanMata(nilai: boolean) {
   perbaruiLipsync({ berkedip: nilai });
 }
+
+/**
+ * Kait diagnostik (opt-in, tidak aktif secara default).
+ *
+ * Bila `window.__SELA_DEBUG__ = true` diset SEBELUM aplikasi dimuat, state lip
+ * sync dipaparkan lewat `window.__selaLipsync()` supaya bisa diperiksa otomatis
+ * — misalnya oleh skrip verifikasi browser yang memastikan mulut avatar benar
+ * benar bergerak saat Sela berbicara. Pada pemakaian normal tidak ada efek apa pun.
+ */
+declare global {
+  interface Window {
+    __SELA_DEBUG__?: boolean;
+    __selaLipsync?: () => StateLipsync;
+  }
+}
+
+if (typeof window !== "undefined" && window.__SELA_DEBUG__) {
+  window.__selaLipsync = ambilStateLipsync;
+}

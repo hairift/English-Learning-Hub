@@ -18,6 +18,12 @@ import { perbaruiLipsync, setelLipsyncDiam, type BobotViseme } from "./lipsyncSt
 /** Konteks audio bersama (dibuat sekali, sesuai kebijakan browser). */
 let konteksAudio: AudioContext | null = null;
 
+/** Penjaga agar `resume()` tidak dipanggil berulang-ulang di dalam loop. */
+let sedangMencobaResume = false;
+
+/** Waktu (performance.now) paling awal untuk mencoba `resume()` lagi. */
+let cooldownResume = 0;
+
 /** Elemen yang sudah pernah dibuatkan MediaElementSource (tidak boleh dua kali). */
 const sudahDisambungkan = new WeakSet<HTMLAudioElement>();
 
@@ -45,6 +51,9 @@ const PELEMBUT = 0.45;
 let visemeSekarang: BobotViseme = { a: 0, i: 0, u: 0, e: 0, o: 0 };
 let kebukaanSekarang = 0;
 
+/** Nilai RMS terakhir yang terbaca (dipakai untuk diagnostik opt-in). */
+let rmsTerakhir = 0;
+
 /** Ambil (atau buat) AudioContext bersama. */
 function ambilKonteksAudio(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -52,11 +61,110 @@ function ambilKonteksAudio(): AudioContext | null {
     const Pabrik = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Pabrik) return null;
     if (!konteksAudio) konteksAudio = new Pabrik();
-    if (konteksAudio.state === "suspended") void konteksAudio.resume();
+    cobaLanjutkanKonteks(konteksAudio);
     return konteksAudio;
   } catch {
     return null;
   }
+}
+
+/**
+ * Coba lanjutkan AudioContext yang sedang "suspended" (kebijakan autoplay).
+ *
+ * `resume()` bersifat asinkron sehingga TIDAK boleh ditunggu di jalur render.
+ * Percobaannya dibatasi (satu per satu + jeda 800 ms) supaya loop animasi yang
+ * berjalan 60x per detik tidak membanjiri browser dengan promise.
+ */
+function cobaLanjutkanKonteks(konteks: AudioContext) {
+  if (konteks.state !== "suspended") return;
+  if (sedangMencobaResume) return;
+  const sekarang = typeof performance !== "undefined" ? performance.now() : 0;
+  if (sekarang < cooldownResume) return;
+
+  sedangMencobaResume = true;
+  konteks
+    .resume()
+    .catch(() => {
+      // Gagal (belum ada gesture pengguna): beri jeda sebelum mencoba lagi.
+      cooldownResume = (typeof performance !== "undefined" ? performance.now() : 0) + 800;
+    })
+    .finally(() => {
+      sedangMencobaResume = false;
+    });
+}
+
+/**
+ * Buka/mengaktifkan mesin audio. Panggil dari handler gesture pengguna
+ * (klik/tap) agar browser mengizinkan pemutaran audio dan analisis lip sync.
+ */
+export function siapkanKonteksAudio(): void {
+  const konteks = ambilKonteksAudio();
+  if (konteks) void konteks.resume().catch(() => undefined);
+}
+
+/**
+ * Cek apakah AudioContext sedang berjalan.
+ *
+ * Dibuat sebagai fungsi terpisah supaya TypeScript tidak "mengunci" tipe
+ * `state` setelah pengecekan sebelumnya (nilai `state` bisa berubah setelah
+ * `resume()` selesai, tetapi TypeScript tidak mengetahuinya).
+ */
+function konteksBerjalan(konteks: AudioContext | null): boolean {
+  return Boolean(konteks && konteks.state === "running");
+}
+
+/**
+ * Tunggu sampai AudioContext benar-benar berjalan (maksimal `waktuTungguMs`).
+ *
+ * Dipakai sebelum memutar TTS: menyambungkan elemen <audio> ke graf Web Audio
+ * saat konteks masih "suspended" akan membuat suara SENYAP. Jadi kita pastikan
+ * dulu konteksnya hidup; bila belum bisa, pemanggil sebaiknya tidak menyambung
+ * elemen ke analiser supaya suara tetap terdengar.
+ */
+export async function pastikanKonteksBerjalan(waktuTungguMs = 400): Promise<boolean> {
+  const konteks = ambilKonteksAudio();
+  if (!konteks) return false;
+  if (konteksBerjalan(konteks)) return true;
+
+  try {
+    await Promise.race([
+      konteks.resume(),
+      new Promise((selesai) => {
+        setTimeout(selesai, waktuTungguMs);
+      })
+    ]);
+  } catch {
+    // Gagal resume (belum ada gesture pengguna): pemanggil akan memakai jalur aman.
+  }
+  return konteksBerjalan(konteks);
+}
+
+/**
+ * Pasang pendengar sekali agar AudioContext otomatis aktif pada interaksi
+ * pertama pengguna (klik, sentuh, atau tombol apa pun). Mengembalikan fungsi
+ * pembersih untuk dipakai di `useEffect`.
+ */
+export function pasangPembukaAudio(): () => void {
+  if (typeof window === "undefined") return () => undefined;
+
+  let sudahDibersihkan = false;
+  const bersihkan = () => {
+    if (sudahDibersihkan) return;
+    sudahDibersihkan = true;
+    window.removeEventListener("pointerdown", buka);
+    window.removeEventListener("keydown", buka);
+    window.removeEventListener("touchstart", buka);
+  };
+  const buka = () => {
+    siapkanKonteksAudio();
+    // Begitu konteks benar-benar berjalan, pendengar tidak diperlukan lagi.
+    if (konteksBerjalan(konteksAudio)) bersihkan();
+  };
+
+  window.addEventListener("pointerdown", buka, { passive: true });
+  window.addEventListener("keydown", buka);
+  window.addEventListener("touchstart", buka, { passive: true });
+  return bersihkan;
 }
 
 /** Menghitung rata-rata kuadrat sinyal (RMS) dari data waktu. */
@@ -150,6 +258,7 @@ function loopAnalisis() {
   bassGabungan /= jumlahSumber;
   midGabungan /= jumlahSumber;
   trebleGabungan /= jumlahSumber;
+  rmsTerakhir = rmsGabungan;
 
   const target = hitungViseme(rmsGabungan, bassGabungan, midGabungan, trebleGabungan);
   const targetKebukaan = Math.max(0, Math.min(1, rmsGabungan * 9));
@@ -190,8 +299,10 @@ export function daftarkanElemenAudio(elemen: HTMLAudioElement, idSumber = `audio
 
   // Penting: menyambungkan elemen ke graf Web Audio akan mengalihkan keluaran
   // suara ke `destination`. Bila AudioContext masih "suspended", suara akan
-  // senyap. Karena itu kita hanya menyambungkan saat konteks benar-benar jalan.
-  if (konteks.state !== "running") return null;
+  // senyap — karena itu kita minta `resume()` di latar. Graf tetap disambungkan
+  // sekarang (tidak menunggu) supaya analisis langsung aktif begitu konteks
+  // berjalan; ini yang membuat mulut avatar ikut bergerak saat Sela bicara.
+  cobaLanjutkanKonteks(konteks);
 
   try {
     const sumberNode = konteks.createMediaElementSource(elemen);
@@ -276,4 +387,32 @@ export function lepasSemuaSumberAudio() {
 /** Menandai bahwa audio sedang diputar / berhenti, untuk indikator UI. */
 export function tandaiAudioDiputar(aktif: boolean) {
   perbaruiLipsync({ bersuara: aktif, sumber: aktif ? "audio" : "idle" });
+}
+
+/**
+ * Kait diagnostik (opt-in, tidak aktif secara default).
+ *
+ * Bila `window.__SELA_DEBUG__ = true` diset SEBELUM aplikasi dimuat, status
+ * mesin audio dipaparkan lewat `window.__selaAudio()` untuk keperluan
+ * pemeriksaan otomatis. Pada pemakaian normal tidak ada efek apa pun.
+ */
+declare global {
+  interface Window {
+    __SELA_DEBUG__?: boolean;
+    __selaAudio?: () => {
+      konteks: string | null;
+      jumlahSumber: number;
+      animasiAktif: boolean;
+      rmsTerakhir: number;
+    };
+  }
+}
+
+if (typeof window !== "undefined" && window.__SELA_DEBUG__) {
+  window.__selaAudio = () => ({
+    konteks: konteksAudio ? konteksAudio.state : null,
+    jumlahSumber: sumberAnalisis.size,
+    animasiAktif: idAnimasi !== null,
+    rmsTerakhir
+  });
 }

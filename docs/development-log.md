@@ -90,6 +90,78 @@
 * `npm run build` → succeeded, with `vendor-three`, `vendor-voice`, and a lazy
   `Sela3DScene` chunk.
 
+### 2026-10-03 — Bug-fix round after the first live review
+
+**Console errors removed**
+
+* `THREE.Clock` deprecation warning: `three@0.186` deprecates `Clock` in favour of
+  `Timer`, but `@react-three/fiber` 9.x still constructs one inside `createStore`,
+  and `three` / `fiber` / `drei` are all already at their latest versions.
+  `src/main.tsx` now filters that single message out of `console.warn` instead of
+  hiding every warning.
+* `GET :7860/health → ERR_CONNECTION_REFUSED`: `startConversation()` probed the
+  optional Pipecat service unconditionally. It now runs only when
+  `VITE_PIPECAT_BASE_URL` is explicitly set (`pipecatDiaktifkan()` in `src/api.ts`),
+  and `checkPipecatHealth()` gained an `AbortController` timeout.
+
+**Lip sync now actually moves**
+
+* Root cause: `daftarkanElemenAudio()` returned `null` whenever
+  `AudioContext.state !== "running"`. `resume()` is asynchronous, so on the first
+  utterance the guard always failed and no analyser was ever attached.
+* Fixes in `src/lipsync/audioAnalyser.ts`: `pasangPembukaAudio()` unlocks the
+  `AudioContext` on the first user gesture, `siapkanKonteksAudio()` is called from
+  the mic/start handlers, the analyser is attached even while the context is still
+  resuming, and `cobaLanjutkanKonteks()` throttles `resume()` so the render loop
+  cannot flood the browser.
+* `pastikanKonteksBerjalan()` guards the audio path: when the context cannot run the
+  element is **not** routed through Web Audio, so speech always stays audible.
+* Verified: context `running`, analyser attached, RMS 0.08, `bersuara: true`, mouth
+  opening animating 0 → 0.69 → 0.41 → 0.13.
+
+**Speech recognition records fully and sends itself**
+
+* `recognition.continuous` was `false`, so Chrome stopped after a few words.
+* Now `continuous = true`, final results accumulate in a ref (they survive Chrome
+  restarting the session), `onend` restarts recording while the user still wants it,
+  and a 1.6 s silence timer submits the answer automatically. Pressing the mic
+  button again also submits.
+
+**Faster speech**
+
+* `tts_service/supertonic_engine.py`: LRU result cache (64 entries) plus a warm-up
+  synthesis at start-up.
+* `src/App.tsx`: client-side TTS cache, and replies are split per sentence so
+  playback starts after the first sentence instead of the whole paragraph.
+* Measured: new sentence ≈ 4 s, repeated sentence ≈ 0.02 s (~170× faster).
+* Default `TTS_STEPS` lowered from 8 to 6.
+
+**Progress panel is now real data**
+
+* Deleted `src/domain/growthMock.ts` and its test.
+* New `src/domain/growth.ts` derives streak, total minutes, last/average score,
+  session counts, weak/strong dimension, next goal, trend, and the weekly map from
+  the real `LearningState` + `CheckinState`, with an honest empty state.
+* `LearningRecord` gained `durationMinutes`.
+
+**Readability and hosting**
+
+* `.scene-card h3` rendered dark navy on a blue gradient because the global
+  `h1, h2, h3` rule overrode the card's inherited white text. Titles, meta text and
+  tag chips are now explicitly white with a soft text shadow; the white custom card
+  keeps dark text.
+* Added `server/production.ts` and `npm start` to serve the built frontend and the
+  API from a single port, so the app can be published to a free host.
+
+**Verification**
+
+* `npm run typecheck` → exit 0.
+* `npm test` → 17 files / 73 tests passed.
+* `npm run build` → succeeded.
+* Playwright run: 0 console errors, 0 failed requests, card title
+  `rgb(255, 255, 255)`, lip sync detected, STT transcript auto-submitted and
+  answered by the AI.
+
 ### Conventions adopted
 
 * New code comments are written in **Bahasa Indonesia**.
@@ -189,6 +261,79 @@
 * `npm test` → 17 berkas uji lulus.
 * `npm run build` → berhasil, dengan chunk `vendor-three`, `vendor-voice`, dan
   `Sela3DScene` yang dimuat lazy.
+
+### 2026-10-03 — Ronde perbaikan bug setelah tinjauan langsung pertama
+
+**Galat konsol dihilangkan**
+
+* Peringatan deprecation `THREE.Clock`: `three@0.186` mengusangkan `Clock` dan
+  menyarankan `Timer`, tetapi `@react-three/fiber` 9.x masih membuatnya di dalam
+  `createStore`, sementara `three` / `fiber` / `drei` sudah versi terbaru.
+  `src/main.tsx` kini menyaring hanya pesan itu dari `console.warn`, bukan
+  menyembunyikan semua peringatan.
+* `GET :7860/health → ERR_CONNECTION_REFUSED`: `startConversation()` selalu menguji
+  layanan Pipecat yang bersifat opsional. Sekarang pengujian hanya dilakukan bila
+  `VITE_PIPECAT_BASE_URL` diset eksplisit (`pipecatDiaktifkan()` di `src/api.ts`),
+  dan `checkPipecatHealth()` diberi batas waktu `AbortController`.
+
+**Lip sync benar-benar bergerak**
+
+* Akar masalah: `daftarkanElemenAudio()` mengembalikan `null` bila
+  `AudioContext.state !== "running"`. Karena `resume()` asinkron, penjaga itu selalu
+  gagal pada ucapan pertama sehingga analiser tidak pernah tersambung.
+* Perbaikan di `src/lipsync/audioAnalyser.ts`: `pasangPembukaAudio()` membuka
+  `AudioContext` pada gesture pertama pengguna, `siapkanKonteksAudio()` dipanggil dari
+  handler mikrofon/mulai, analiser tetap disambungkan walau konteks baru di-resume,
+  dan `cobaLanjutkanKonteks()` membatasi percobaan `resume()` agar loop render tidak
+  membanjiri browser.
+* `pastikanKonteksBerjalan()` menjaga jalur audio: bila konteks tidak bisa berjalan,
+  elemen **tidak** disambungkan ke Web Audio sehingga suara tetap terdengar.
+* Terverifikasi: konteks `running`, analiser tersambung, RMS 0,08, `bersuara: true`,
+  kebukaan mulut bergerak 0 → 0,69 → 0,41 → 0,13.
+
+**STT merekam penuh dan mengirim otomatis**
+
+* `recognition.continuous` bernilai `false` sehingga Chrome berhenti setelah beberapa
+  kata. Sekarang `continuous = true`, hasil final diakumulasi di ref (tetap aman saat
+  Chrome memulai ulang sesi), `onend` memulai ulang rekaman selama pengguna masih
+  menginginkannya, dan timer hening 1,6 detik mengirim jawaban otomatis. Menekan
+  tombol mikrofon sekali lagi juga langsung mengirim.
+
+**Suara lebih cepat**
+
+* `tts_service/supertonic_engine.py`: cache hasil (64 entri) + sintesis pemanasan
+  saat start-up.
+* `src/App.tsx`: cache TTS sisi klien, dan balasan dipecah per kalimat sehingga
+  pemutaran mulai setelah kalimat pertama, bukan setelah seluruh paragraf.
+* Hasil ukur: kalimat baru ≈ 4 detik, kalimat berulang ≈ 0,02 detik (~170× lebih cepat).
+* `TTS_STEPS` bawaan diturunkan dari 8 menjadi 6.
+
+**Panel progres kini memakai data nyata**
+
+* `src/domain/growthMock.ts` dan tesnya dihapus.
+* `src/domain/growth.ts` baru menurunkan rentetan hari, total menit, skor terakhir
+  dan rata-rata, jumlah sesi, dimensi terlemah/terkuat, target berikutnya, tren, dan
+  peta mingguan dari `LearningState` + `CheckinState` yang nyata, lengkap dengan
+  kondisi kosong yang jujur.
+* `LearningRecord` mendapat field `durationMinutes`.
+
+**Keterbacaan dan hosting**
+
+* `.scene-card h3` tampil biru tua di atas gradasi biru karena aturan global
+  `h1, h2, h3` mengalahkan pewarisan teks putih dari kartu. Judul, teks meta, dan chip
+  tag kini dipaksa putih dengan bayangan teks halus; kartu kustom berlatar putih tetap
+  memakai teks gelap.
+* Ditambahkan `server/production.ts` dan `npm start` untuk melayani frontend hasil build
+  dan API dari satu port sehingga aplikasi bisa dipublikasikan ke hosting gratis.
+
+**Verifikasi**
+
+* `npm run typecheck` → exit 0.
+* `npm test` → 17 berkas / 73 tes lulus.
+* `npm run build` → berhasil.
+* Uji Playwright: 0 galat konsol, 0 permintaan gagal, warna judul kartu
+  `rgb(255, 255, 255)`, lip sync terdeteksi, transkrip STT terkirim otomatis dan
+  dijawab AI.
 
 ### Konvensi yang diadopsi
 

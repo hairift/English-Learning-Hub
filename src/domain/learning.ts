@@ -9,6 +9,11 @@ export type LearningRecord = {
   focus: string;
   score: number;
   roundCount: number;
+  /**
+   * Durasi sesi dalam menit. Opsional supaya catatan lama (sebelum field ini
+   * ada) tetap bisa dibaca; bila kosong, dipakai `MENIT_PER_SESI_DEFAULT`.
+   */
+  durationMinutes?: number;
   correctionCount: number;
   suggestionCount: number;
   dimensions: Array<{
@@ -42,6 +47,7 @@ export function createLearningRecord(input: {
   taskTitleZh: string;
   focus: string;
   roundCount: number;
+  durationMinutes?: number;
   report: ReportResult;
 }): LearningRecord {
   const [nextGoal = "Lanjutkan menambahkan contoh yang lebih spesifik pada sesi berikutnya. / Add more specific examples next round."] = input.report.suggestions;
@@ -55,6 +61,7 @@ export function createLearningRecord(input: {
     focus: input.focus,
     score: input.report.totalScore,
     roundCount: input.roundCount,
+    durationMinutes: input.durationMinutes,
     correctionCount: input.report.corrections.length,
     suggestionCount: input.report.suggestions.length,
     dimensions: input.report.dimensions.map((dimension) => ({

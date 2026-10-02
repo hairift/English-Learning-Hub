@@ -31,6 +31,7 @@ cp .env.example .env.local  # then fill in your keys (optional)
 | `npm run dev:client` | Frontend only (`vite --host 127.0.0.1`) |
 | `npm run dev:tts` | Supertonic sidecar (`scripts/start-tts.mjs`) |
 | `npm run build` | Type-check, then production build into `dist/` |
+| `npm start` | Serve `dist/` **and** the API on one port (`server/production.ts`) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Run the Vitest suite once |
 | `npm run test:watch` | Vitest in watch mode |
@@ -78,6 +79,25 @@ paint:
 | `vendor-three` | Three.js + React Three Fiber + drei |
 | `vendor-voice` | Pipecat WebRTC client |
 | `Sela3DScene-*.js` | Lazily loaded 3D scene (~2.8 kB) |
+
+**Single-port production mode (hosting)**
+
+`server/production.ts` serves the built frontend **and** the API from one process, so
+the app can run behind a single public port:
+
+```bash
+npm run build
+npm start          # listens on $PORT (default 5174), binds 0.0.0.0
+```
+
+It calls `createApp()` for `/api/*`, serves `dist/` with `express.static`, and falls
+back to `dist/index.html` for client-side routes. The Supertonic sidecar is optional
+here: if it is not running, the frontend automatically falls back to the browser's
+built-in speech synthesis, so practice still works.
+
+> **Sandbox note:** if `npm run build` fails with `[vite:prepare-out-dir] safe-delete`,
+> the environment's trash helper timed out while clearing `dist/`. Move the folder out
+> of the way (`mv dist ../dist-old`) and build again — Vite then creates it fresh.
 
 ### 7. Project conventions
 
@@ -216,6 +236,7 @@ cp .env.example .env.local  # lalu isi kunci Anda (opsional)
 | `npm run dev:client` | Frontend saja (`vite --host 127.0.0.1`) |
 | `npm run dev:tts` | Sidecar Supertonic (`scripts/start-tts.mjs`) |
 | `npm run build` | Type-check, lalu build produksi ke `dist/` |
+| `npm start` | Melayani `dist/` **dan** API di satu port (`server/production.ts`) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Jalankan suite Vitest sekali |
 | `npm run test:watch` | Vitest mode watch |
@@ -263,6 +284,25 @@ render pertama:
 | `vendor-three` | Three.js + React Three Fiber + drei |
 | `vendor-voice` | Klien WebRTC Pipecat |
 | `Sela3DScene-*.js` | Pemandangan 3D yang dimuat lazy (~2,8 kB) |
+
+**Mode produksi satu port (hosting)**
+
+`server/production.ts` melayani frontend hasil build **dan** API dari satu proses,
+sehingga aplikasi bisa berjalan di balik satu port publik:
+
+```bash
+npm run build
+npm start          # mendengarkan $PORT (default 5174), bind 0.0.0.0
+```
+
+Skrip ini memanggil `createApp()` untuk `/api/*`, menyajikan `dist/` dengan
+`express.static`, dan jatuh ke `dist/index.html` untuk rute sisi klien. Sidecar
+Supertonic bersifat opsional di sini: bila tidak berjalan, frontend otomatis memakai
+suara bawaan browser sehingga latihan tetap bisa dilakukan.
+
+> **Catatan sandbox:** bila `npm run build` gagal dengan `[vite:prepare-out-dir] safe-delete`,
+> helper trash lingkungan tersebut kehabisan waktu saat mengosongkan `dist/`. Pindahkan
+> foldernya (`mv dist ../dist-old`) lalu build lagi — Vite akan membuatnya dari nol.
 
 ### 7. Konvensi proyek
 

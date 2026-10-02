@@ -74,6 +74,22 @@ Two things that are easy to get wrong:
 * `sample_rate` is `44100` and must be read from `tts.sample_rate` **after** the
   model has been loaded.
 
+**Latency controls**
+
+Diffusion-based TTS on CPU costs a few seconds per new sentence, so the engine and
+the client both cache:
+
+| Layer | Mechanism | Effect |
+| --- | --- | --- |
+| `supertonic_engine.py` | LRU result cache keyed by `(text, lang, voice, speed, steps)`, 64 entries | A repeated sentence returns instantly |
+| `supertonic_engine.py` | `panaskan()` — one short warm-up synthesis after the model loads (daemon thread) | Removes the cold-start penalty for the first user |
+| `src/App.tsx` | Client-side cache (40 entries) | Repeated AI phrases never hit the network |
+| `src/App.tsx` | Replies split per sentence (`pecahKalimat`) | Playback starts after the first sentence instead of the whole paragraph |
+
+Measured on this machine: a **new** sentence takes ≈ 4 s, a **repeated** sentence
+≈ 0.02 s (~170× faster). The default `TTS_STEPS` is **6** (was 8) — a good
+speed/quality balance; raise it in the settings panel for maximum quality.
+
 ### 5. Number normalisation — the core problem
 
 Supertonic's built-in normaliser is tuned for English. When `lang="id"`, raw
@@ -268,6 +284,22 @@ Dua hal yang mudah salah:
   berkas sementara bila perlu.
 * `sample_rate` = `44100` dan wajib dibaca dari `tts.sample_rate` **setelah**
   model dimuat.
+
+**Kendali latensi**
+
+TTS berbasis difusi di CPU butuh beberapa detik untuk setiap kalimat baru, jadi mesin
+dan klien sama-sama menyimpan cache:
+
+| Lapisan | Mekanisme | Efek |
+| --- | --- | --- |
+| `supertonic_engine.py` | Cache hasil (LRU) dengan kunci `(teks, lang, voice, speed, steps)`, 64 entri | Kalimat yang sama diulang kembali seketika |
+| `supertonic_engine.py` | `panaskan()` — satu sintesis pendek setelah model dimuat (thread daemon) | Menghilangkan penalti cold-start bagi pengguna pertama |
+| `src/App.tsx` | Cache sisi klien (40 entri) | Frasa AI berulang tidak lagi memanggil jaringan |
+| `src/App.tsx` | Balasan dipecah per kalimat (`pecahKalimat`) | Pemutaran mulai setelah kalimat pertama, bukan seluruh paragraf |
+
+Hasil ukur di mesin ini: kalimat **baru** ≈ 4 detik, kalimat **berulang** ≈ 0,02 detik
+(~170× lebih cepat). `TTS_STEPS` bawaan kini **6** (sebelumnya 8) — keseimbangan
+kecepatan/kualitas yang baik; naikkan lewat panel pengaturan bila ingin kualitas maksimal.
 
 ### 5. Normalisasi angka — inti masalahnya
 

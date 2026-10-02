@@ -165,8 +165,22 @@ In the app, the navbar chip shows the active voice and language mode (e.g. `F1 �
 | `npm run dev:server` | Node API only |
 | `npm run dev:client` | Vite dev server only |
 | `npm run build` | Type-check + production build to `dist/` |
+| `npm start` | Serve `dist/` **and** the API on one port (production / hosting) |
 | `npm run typecheck` | TypeScript check only |
 | `npm test` | Run the Vitest suite |
+
+### 4. Single-port production mode (hosting)
+
+`server/production.ts` serves the built frontend and the API from **one** process, so
+the app can be published to any host that exposes a single HTTP port:
+
+```bash
+npm run build
+npm start        # listens on $PORT (default 5174) and binds 0.0.0.0
+```
+
+The Supertonic sidecar is optional in this mode — if it is not running, the frontend
+falls back to the browser's built-in speech synthesis, so practice still works.
 
 ## 5. Configuration
 
@@ -233,17 +247,22 @@ Lip sync works in three tiers:
 2. **WebRTC stream** — the bot's audio track is registered with the same analyser, so the mouth moves during a Pipecat call.
 3. **Text fallback** — if audio cannot be analysed (e.g. browser `speechSynthesis`), a timer drives visemes from the text being spoken.
 
+> **Maintainer note:** the `AudioContext` must be unlocked by a user gesture before
+> playback. `pasangPembukaAudio()` resumes it on the first interaction; if the context
+> cannot run, the `<audio>` element is deliberately **not** routed through Web Audio
+> (otherwise the speech would be silent) and the text fallback takes over.
+
 See [`docs/3d-avatar-lipsync.md`](docs/3d-avatar-lipsync.md).
 
 ## 8. Testing
 
 ```bash
-npm test          # 17 test files
+npm test          # 17 test files / 73 tests
 npm run typecheck # tsc --noEmit
 npm run build     # production build
 ```
 
-The suite covers the API surface, session lifecycle, report generation, provider settings, the text normaliser, and the avatar fallback behaviour.
+The suite covers the API surface, session lifecycle, report generation, provider settings, the text normaliser, the growth/progress derivation, and the avatar fallback behaviour.
 
 ## 9. Documentation index
 
@@ -419,8 +438,22 @@ Di aplikasi, chip pada navbar menampilkan suara dan mode bahasa yang aktif (mis.
 | `npm run dev:server` | Hanya API Node |
 | `npm run dev:client` | Hanya Vite dev server |
 | `npm run build` | Type-check + build produksi ke `dist/` |
+| `npm start` | Melayani `dist/` **dan** API di satu port (produksi / hosting) |
 | `npm run typecheck` | Hanya pemeriksaan TypeScript |
 | `npm test` | Menjalankan rangkaian tes Vitest |
+
+### 4. Mode produksi satu port (hosting)
+
+`server/production.ts` melayani frontend hasil build dan API dari **satu** proses,
+sehingga aplikasi bisa dipublikasikan ke host mana pun yang menyediakan satu port HTTP:
+
+```bash
+npm run build
+npm start        # mendengarkan $PORT (default 5174) dan bind 0.0.0.0
+```
+
+Sidecar Supertonic bersifat opsional pada mode ini — bila tidak berjalan, frontend
+memakai suara bawaan browser sehingga latihan tetap bisa dilakukan.
 
 ## 5. Konfigurasi
 
@@ -492,12 +525,12 @@ Lihat [`docs/3d-avatar-lipsync.md`](docs/3d-avatar-lipsync.md).
 ## 8. Pengujian
 
 ```bash
-npm test          # 17 berkas tes
+npm test          # 17 berkas tes / 73 tes
 npm run typecheck # tsc --noEmit
 npm run build     # build produksi
 ```
 
-Rangkaian tes mencakup permukaan API, siklus hidup sesi, pembuatan laporan, pengaturan provider, normaliser teks, dan perilaku cadangan avatar.
+Rangkaian tes mencakup permukaan API, siklus hidup sesi, pembuatan laporan, pengaturan provider, normaliser teks, perhitungan progres belajar, dan perilaku cadangan avatar.
 
 ## 9. Indeks dokumentasi
 

@@ -51,6 +51,12 @@ class MesinSupertonic:
         self._kunci = threading.Lock()
         self._galat: str | None = None
         self._cache_gaya: dict[str, Any] = {}
+        # Cache hasil sintesis: kalimat yang berulang (sapaan, umpan balik umum)
+        # bisa dikembalikan seketika tanpa menjalankan model lagi.
+        self._cache_hasil: dict[tuple, HasilSintesis] = {}
+        self._kunci_cache = threading.Lock()
+        self._batas_cache = 64
+        self._hangat = False
 
     # ------------------------------------------------------------------ #
     # Status
@@ -189,14 +195,26 @@ class MesinSupertonic:
             raise RuntimeError(f"Supertonic belum siap: {self._galat}")
 
         lang_aman = lang if lang in BAHASA_DIDUKUNG else "na"
-        gaya = self._ambil_gaya(voice)
+        steps_aman = max(5, min(12, int(steps)))
+        speed_aman = max(0.7, min(2.0, float(speed)))
+        suara_aman = voice or SUARA_DEFAULT
+
+        # Cek cache lebih dulu: ini memangkas latensi hampir sepenuhnya untuk
+        # kalimat yang sudah pernah disintesis.
+        kunci = (teks, lang_aman, suara_aman, round(speed_aman, 3), steps_aman)
+        with self._kunci_cache:
+            tersimpan = self._cache_hasil.get(kunci)
+        if tersimpan is not None:
+            return tersimpan
+
+        gaya = self._ambil_gaya(suara_aman)
 
         # `speed` Supertonic valid di rentang 0.7 - 2.0, `total_steps` 5 - 12.
         wav, durasi = self._tts.synthesize(
             text=teks,
             voice_style=gaya,
-            total_steps=max(5, min(12, int(steps))),
-            speed=max(0.7, min(2.0, float(speed))),
+            total_steps=steps_aman,
+            speed=speed_aman,
             lang=lang_aman,
         )
 
@@ -205,15 +223,45 @@ class MesinSupertonic:
 
         audio_base64 = base64.b64encode(audio_bytes).decode("ascii")
 
-        return HasilSintesis(
+        hasil = HasilSintesis(
             audio_base64=audio_base64,
             format="wav",
             sample_rate=int(getattr(self._tts, "sample_rate", 44100) or 44100),
             durasi_detik=self._durasi_detik(durasi),
             lang=lang_aman,
-            voice=voice or SUARA_DEFAULT,
-            meta={"total_steps": int(steps), "speed": float(speed)},
+            voice=suara_aman,
+            meta={"total_steps": steps_aman, "speed": speed_aman},
         )
+
+        with self._kunci_cache:
+            if len(self._cache_hasil) >= self._batas_cache:
+                self._cache_hasil.clear()
+            self._cache_hasil[kunci] = hasil
+
+        return hasil
+
+    def panaskan(self) -> None:
+        """
+        Sintesis contoh pendek sekali agar model "hangat".
+
+        Sesi pertama biasanya paling lambat (alokasi memori & grafik komputasi).
+        Pemanasan ini dipanggil di latar belakang saat service mulai sehingga
+        pengguna pertama tidak merasakan latensi awal.
+        """
+        if self._hangat:
+            return
+        try:
+            self.sintesis(
+                teks="Halo, saya Sela, siap membantu latihan bahasa Inggrismu.",
+                lang="id",
+                voice=SUARA_DEFAULT,
+                speed=1.0,
+                steps=6,
+            )
+            self._hangat = True
+        except Exception:
+            # Pemanasan bersifat best-effort: kegagalan tidak boleh menghentikan layanan.
+            pass
 
 
 # Instance tunggal yang dipakai seluruh service.

@@ -134,6 +134,25 @@ The analyser is registered in two ways:
 | `daftarkanElemenAudio(el)` | `<audio>` element (TTS playback) | Connected to `destination` so sound still plays |
 | `daftarkanStreamAudio(stream)` | `MediaStream` (WebRTC bot audio) | **Not** connected to `destination` — the owning `<audio>` already plays it, otherwise audio would double |
 
+**The `AudioContext` must be unlocked first (common pitfall).**
+
+Browsers keep a freshly created `AudioContext` in the `suspended` state until a user
+gesture occurs, and `resume()` is asynchronous. Because of that:
+
+* `pasangPembukaAudio()` (installed once from `App.tsx`) calls `resume()` on the first
+  `pointerdown` / `keydown` / `touchstart`, so the context is already running by the
+  time the first sentence is spoken.
+* `siapkanKonteksAudio()` is also called from the mic and "start practice" handlers.
+* `daftarkanElemenAudio()` does **not** bail out while the context is still resuming —
+  it attaches the graph and lets `cobaLanjutkanKonteks()` finish the resume in the
+  background (throttled, so the 60 fps render loop cannot flood the browser).
+* `pastikanKonteksBerjalan()` is awaited before playback. If the context genuinely
+  cannot run, the element is **not** routed through Web Audio — otherwise the speech
+  would be silent — and the text-driven viseme path is used instead.
+
+Getting this wrong is exactly why "lip sync does not work" happens: the audio plays,
+but the analyser was never attached.
+
 #### 6.2 Text path (fallback)
 
 When audio analysis is unavailable, `visemeDariTeks.ts` estimates a viseme
@@ -367,6 +386,25 @@ Analiser didaftarkan dengan dua cara:
 | --- | --- | --- |
 | `daftarkanElemenAudio(el)` | Elemen `<audio>` (pemutaran TTS) | Disambungkan ke `destination` agar suara tetap terdengar |
 | `daftarkanStreamAudio(stream)` | `MediaStream` (audio bot WebRTC) | **Tidak** disambungkan ke `destination` — elemen `<audio>` pemiliknya sudah memutar, kalau disambung akan ganda |
+
+**`AudioContext` harus dibuka lebih dulu (jebakan yang sering terjadi).**
+
+Browser menahan `AudioContext` yang baru dibuat pada status `suspended` sampai ada
+gesture pengguna, dan `resume()` bersifat asinkron. Karena itu:
+
+* `pasangPembukaAudio()` (dipasang sekali dari `App.tsx`) memanggil `resume()` pada
+  `pointerdown` / `keydown` / `touchstart` pertama, sehingga konteks sudah berjalan
+  sebelum kalimat pertama diucapkan.
+* `siapkanKonteksAudio()` juga dipanggil dari handler mikrofon dan "mulai latihan".
+* `daftarkanElemenAudio()` **tidak** menyerah saat konteks masih di-resume — graf tetap
+  disambungkan dan `cobaLanjutkanKonteks()` menyelesaikan resume di latar (dibatasi
+  agar loop render 60 fps tidak membanjiri browser).
+* `pastikanKonteksBerjalan()` ditunggu sebelum pemutaran. Bila konteks benar-benar tidak
+  bisa berjalan, elemen **tidak** dialirkan lewat Web Audio — kalau tidak, suara akan
+  senyap — dan jalur viseme dari teks yang dipakai.
+
+Kesalahan di titik inilah penyebab kasus "lip sync tidak berfungsi": suara terdengar,
+tetapi analiser tidak pernah tersambung.
 
 #### 6.2 Jalur teks (cadangan)
 

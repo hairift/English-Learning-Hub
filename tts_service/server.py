@@ -90,7 +90,12 @@ async def lifespan(_app: FastAPI):
     """
     import threading
 
-    threading.Thread(target=mesin.muat, name="muat-supertonic", daemon=True).start()
+    def _siapkan_mesin() -> None:
+        # Muat model, lalu "hangatkan" sekali supaya sesi TTS pertama tidak lambat.
+        if mesin.muat():
+            mesin.panaskan()
+
+    threading.Thread(target=_siapkan_mesin, name="muat-supertonic", daemon=True).start()
     yield
 
 
