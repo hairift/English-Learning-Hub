@@ -390,6 +390,33 @@ export function tandaiAudioDiputar(aktif: boolean) {
 }
 
 /**
+ * Kekuatan audio (RMS) yang sedang terbaca analiser.
+ *
+ * Dipakai oleh penggerak gerak mulut prosedural (`gerakMulut.ts`) untuk
+ * memutuskan siapa yang berhak menggerakkan mulut:
+ * - Ada sinyal nyata  -> analiser audio yang mengatur (lip sync akurat).
+ * - Tidak ada sinyal  -> penggerak prosedural yang mengambil alih.
+ *
+ * Nilainya 0 bila tidak ada sumber audio aktif sama sekali, sehingga
+ * pemanggil otomatis memakai jalur cadangan.
+ */
+export function kekuatanAudioSekarang(): number {
+  if (sumberAnalisis.size === 0) return 0;
+  return rmsTerakhir;
+}
+
+/** Jumlah sumber audio yang sedang dianalisis (0 = tidak ada audio TTS). */
+export function jumlahSumberAktif(): number {
+  return sumberAnalisis.size;
+}
+
+/**
+ * Ambang kekuatan audio yang dianggap "benar-benar bersuara".
+ * Di bawah nilai ini, penggerak prosedural boleh mengambil alih.
+ */
+export const AMBANG_AUDIO_BERSUARA = 0.02;
+
+/**
  * Kait diagnostik (opt-in, tidak aktif secara default).
  *
  * Bila `window.__SELA_DEBUG__ = true` diset SEBELUM aplikasi dimuat, status

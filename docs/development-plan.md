@@ -131,7 +131,7 @@ Sebelum rilis apa pun:
 
 ```bash
 npm run typecheck   # harus keluar 0
-npm test            # 17 berkas uji harus lulus
+npm test            # 19 berkas uji harus lulus
 npm run build       # harus menghasilkan dist/
 ```
 

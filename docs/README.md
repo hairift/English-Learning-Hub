@@ -17,6 +17,7 @@ Every current document is bilingual: an **English** section followed by a
 | [`provider-setup.md`](provider-setup.md) | Configuring the LLM / ASR / TTS / pronunciation providers |
 | [`tts-supertonic.md`](tts-supertonic.md) | Supertonic sidecar, voices, language modes, number normalisation |
 | [`3d-avatar-lipsync.md`](3d-avatar-lipsync.md) | 3D avatar pipeline, morph targets, animation clips, lip sync |
+| [`responsive-and-voice.md`](responsive-and-voice.md) | Responsive breakpoints, always-on mouth motion, bilingual speech recognition, TTS reliability |
 | [`visual-design-system.md`](visual-design-system.md) | Blue brand palette, tokens, components, motion |
 | [`product-requirements.md`](product-requirements.md) | Positioning, users, scenarios, scoring, acceptance criteria |
 | [`ui-information-architecture.md`](ui-information-architecture.md) | Navigation structure, screen responsibilities, interaction states |
@@ -41,6 +42,12 @@ app.
 | `07-menjawab.png` | Answering |
 | `08-transkrip.png` | Transcript |
 | `09-laporan.png` | Evaluation report |
+| `10-tablet-beranda.png` | Home — tablet (1024 px) |
+| `11-tablet-latihan.png` | Task selection — tablet (1024 px) |
+| `11b-tablet-ruang-latihan.png` | Practice room — tablet (1024 px) |
+| `12-mobile-beranda.png` | Home — mobile (390 px) |
+| `13-mobile-latihan.png` | Task selection — mobile (390 px) |
+| `13b-mobile-ruang-latihan.png` | Practice room — mobile (390 px) |
 
 ### Archive
 
@@ -63,6 +70,7 @@ Setiap dokumen terkini bersifat bilingual: bagian **English** diikuti bagian
 | [`provider-setup.md`](provider-setup.md) | Mengatur provider LLM / ASR / TTS / pengucapan |
 | [`tts-supertonic.md`](tts-supertonic.md) | Sidecar Supertonic, suara, mode bahasa, normalisasi angka |
 | [`3d-avatar-lipsync.md`](3d-avatar-lipsync.md) | Pipeline avatar 3D, morph target, klip animasi, lip sync |
+| [`responsive-and-voice.md`](responsive-and-voice.md) | Titik henti responsif, gerak mulut yang selalu hidup, pengenalan suara bilingual, keandalan TTS |
 | [`visual-design-system.md`](visual-design-system.md) | Palet merek biru, token, komponen, gerak |
 | [`product-requirements.md`](product-requirements.md) | Posisi, pengguna, skenario, penilaian, kriteria penerimaan |
 | [`ui-information-architecture.md`](ui-information-architecture.md) | Struktur navigasi, tanggung jawab layar, status interaksi |
@@ -87,6 +95,12 @@ aplikasi yang berjalan.
 | `07-menjawab.png` | Menjawab |
 | `08-transkrip.png` | Transkrip |
 | `09-laporan.png` | Laporan evaluasi |
+| `10-tablet-beranda.png` | Beranda — tablet (1024 px) |
+| `11-tablet-latihan.png` | Pilih topik — tablet (1024 px) |
+| `11b-tablet-ruang-latihan.png` | Ruang latihan — tablet (1024 px) |
+| `12-mobile-beranda.png` | Beranda — ponsel (390 px) |
+| `13-mobile-latihan.png` | Pilih topik — ponsel (390 px) |
+| `13b-mobile-ruang-latihan.png` | Ruang latihan — ponsel (390 px) |
 
 ### Arsip
 

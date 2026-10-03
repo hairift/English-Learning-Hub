@@ -15,6 +15,34 @@ import type { Scenario } from "../server/data";
 const KEY = "ai-speaking-coach-checkin";
 const LEARNING_KEY = "ai-speaking-coach-learning";
 const CUSTOM_SCENARIOS_KEY = "ai-speaking-coach-custom-scenarios";
+const ASR_LANGUAGE_KEY = "sela-asr-language";
+
+/**
+ * Bahasa pengenalan suara (ASR) yang dipilih pengguna.
+ *
+ * `auto` berarti aplikasi memilih sendiri dan menyesuaikan antar sesi rekaman
+ * (lihat `mulaiMikrofon`), karena Web Speech API tidak bisa mendeteksi bahasa
+ * secara langsung dalam satu sesi.
+ */
+export type BahasaAsr = "auto" | "id-ID" | "en-US";
+
+export function loadBahasaAsr(): BahasaAsr {
+  try {
+    const raw = localStorage.getItem(ASR_LANGUAGE_KEY);
+    if (raw === "id-ID" || raw === "en-US" || raw === "auto") return raw;
+  } catch {
+    // Penyimpanan tidak tersedia (mode privat): pakai nilai default.
+  }
+  return "auto";
+}
+
+export function saveBahasaAsr(nilai: BahasaAsr) {
+  try {
+    localStorage.setItem(ASR_LANGUAGE_KEY, nilai);
+  } catch {
+    // Penyimpanan tidak tersedia (mode privat): abaikan dengan aman.
+  }
+}
 
 export function loadCheckin(): CheckinState {
   try {

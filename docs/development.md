@@ -256,14 +256,16 @@ Vite mem-proxy `/api` ke `http://127.0.0.1:5174` di mode **`server` maupun
 
 ### 5. Pengujian
 
-Suite memakai **Vitest** + **Supertest** (17 berkas uji):
+Suite memakai **Vitest** + **Supertest** (19 berkas uji):
 
 ```bash
 npm test
 ```
 
 Cakupannya meliputi permukaan API, siklus hidup sesi, normalisasi teks,
-pembuatan laporan, pembungkus avatar 3D, dan klien Pipecat.
+pembuatan laporan, pembungkus avatar 3D, klien Pipecat, **pemetaan viseme
+gerak mulut** (`tests/lipsyncMulut.test.ts`), dan **preferensi bahasa ASR**
+(`tests/bahasaAsr.test.ts`).
 
 Karena `Sela3DScene` lazy dan bergerbang WebGL, seluruh suite berjalan di
 **jsdom tanpa GPU**.

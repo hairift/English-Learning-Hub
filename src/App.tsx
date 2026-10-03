@@ -36,11 +36,14 @@ import { getShanghaiDate, type CheckinState } from "./domain/checkin";
 import { ringkasanProgres } from "./domain/growth";
 import {
   completeToday,
+  loadBahasaAsr,
   loadCheckin,
   loadCustomScenarios,
   loadLearning,
   recordLearning,
-  saveCustomScenario
+  saveBahasaAsr,
+  saveCustomScenario,
+  type BahasaAsr
 } from "./storage";
 import {
   createLearningRecord,
@@ -58,13 +61,15 @@ import { getTranscriptFollowState } from "./practiceTranscript";
 import {
   daftarkanElemenAudio,
   daftarkanStreamAudio,
+  kekuatanAudioSekarang,
   lepasSemuaSumberAudio,
   lepasSumberAudio,
   pasangPembukaAudio,
   pastikanKonteksBerjalan,
   siapkanKonteksAudio
 } from "./lipsync/audioAnalyser";
-import { mulaiVisemeDariTeks } from "./lipsync/visemeDariTeks";
+import { mulaiGerakMulut, type KendaliMulut } from "./lipsync/gerakMulut";
+import { browserPunyaSuara, ucapkanDenganBrowser, type KendaliUcapBrowser } from "./suaraBrowser";
 
 type Screen = "home" | "prep" | "practice" | "report";
 type JourneyStatus = "done" | "active" | "waiting";
@@ -156,6 +161,8 @@ export default function App() {
   const [unseenTurnCount, setUnseenTurnCount] = useState(0);
   /** Tanggal hari ini menurut zona Asia/Shanghai; diperbarui berkala agar tetap realtime. */
   const [hariIni, setHariIni] = useState(() => getShanghaiDate());
+  /** Bahasa pengenalan suara untuk mikrofon (Otomatis / Indonesia / Inggris). */
+  const [bahasaAsr, setBahasaAsr] = useState<BahasaAsr>(() => loadBahasaAsr());
 
   const todayDone = checkin.completedDates.includes(hariIni);
   const learningSummary = useMemo(() => summarizeLearning(learning), [learning]);
@@ -185,16 +192,43 @@ export default function App() {
     const supertonic = health?.providers.supertonic;
     const voice = supertonic?.voice || tts.voice || "";
     const mode = tts.languageMode === "en" ? "English" : tts.languageMode === "id" ? "Indonesia" : "Auto ID/EN";
+    const supertonicSiap = Boolean(supertonic?.serviceReady);
+    // Mesin suara yang benar-benar dipakai: Supertonic bila sidecar siap,
+    // kalau tidak aplikasi otomatis memakai suara bawaan browser.
+    const pakaiSupertonic = tts.provider === "supertonic" && supertonicSiap;
+    const offline = tts.provider === "supertonic" && !supertonicSiap;
     return {
       provider: tts.provider,
       voice,
       mode,
-      offline: tts.provider === "supertonic" && !supertonic?.serviceReady
+      offline,
+      supertonicSiap,
+      mesin: pakaiSupertonic ? "Supertonic" : "Suara browser",
+      keterangan: pakaiSupertonic
+        ? `Supertonic ${voice || "F1"} · ${mode}`
+        : `Suara browser (cadangan) · ${mode}`
     };
   }, [health]);
 
   useEffect(() => {
-    void api.health().then(setHealth).catch(() => null);
+    void api
+      .health()
+      .then((hasil) => {
+        setHealth(hasil);
+        // Hangatkan mesin TTS di latar belakang. Sintesis pertama paling lambat
+        // (model baru dimuat), sehingga sapaan pembuka terasa "kadang lambat".
+        // Panggilan ini mengisi cache server sekaligus cache klien.
+        if (hasil.providers.supertonic?.serviceReady) {
+          const teksHangat = "Halo! Saya Sela, siap membantu latihan bahasa Inggrismu.";
+          void api
+            .synthesize(teksHangat)
+            .then((audio) => {
+              if (audioTtsSah(audio)) cacheTtsRef.current.set(teksHangat, audio as SpeechAudioResult);
+            })
+            .catch(() => null);
+        }
+      })
+      .catch(() => null);
     void api
       .scenarios()
       .then((result) => {
@@ -386,12 +420,25 @@ export default function App() {
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   /** ID sumber analisis audio untuk lip sync. */
   const lipsyncSourceRef = useRef<string | null>(null);
-  /** Penghenti animasi mulut berbasis teks (mode cadangan). */
-  const stopVisemeTeksRef = useRef<(() => void) | null>(null);
+  /** Penggerak gerakan mulut prosedural yang sedang berjalan (selalu hidup saat bicara). */
+  const kendaliMulutRef = useRef<KendaliMulut | null>(null);
+  /** Ucapan `speechSynthesis` yang sedang berjalan (agar bisa dibatalkan). */
+  const kendaliUcapBrowserRef = useRef<KendaliUcapBrowser | null>(null);
   /** Nomor generasi pemutaran suara; naik setiap kali suara dihentikan. */
   const generasiSuaraRef = useRef(0);
   /** Menyelesaikan penantian pemutaran audio yang sedang berjalan (dipakai saat dibatalkan). */
   const pembatalSuaraRef = useRef<(() => void) | null>(null);
+  /**
+   * Bahasa yang dipakai recognizer pada sesi terakhir.
+   * Dipakai mode `auto` untuk menyesuaikan bahasa antar sesi rekaman.
+   */
+  const bahasaRecognitionRef = useRef<"id-ID" | "en-US">("id-ID");
+
+  /** Hentikan penggerak gerakan mulut prosedural (bila sedang berjalan). */
+  function hentikanGerakMulut() {
+    kendaliMulutRef.current?.hentikan();
+    kendaliMulutRef.current = null;
+  }
 
   /** Menghentikan seluruh sumber suara & lip sync yang sedang berjalan. */
   function hentikanSumberSuara() {
@@ -399,8 +446,9 @@ export default function App() {
     generasiSuaraRef.current += 1;
     pembatalSuaraRef.current?.();
     pembatalSuaraRef.current = null;
-    stopVisemeTeksRef.current?.();
-    stopVisemeTeksRef.current = null;
+    kendaliUcapBrowserRef.current?.batalkan();
+    kendaliUcapBrowserRef.current = null;
+    hentikanGerakMulut();
     lepasSumberAudio(lipsyncSourceRef.current);
     lipsyncSourceRef.current = null;
     if (audioPlayerRef.current) {
@@ -450,48 +498,93 @@ export default function App() {
     }
   }
 
-  /** Ambil audio TTS sebuah teks dari cache klien, atau minta ke backend. */
+  /**
+   * True bila hasil sintesis benar-benar berisi audio yang bisa diputar.
+   *
+   * Backend mengembalikan "audio mock" (base64 dari teks biasa) ketika layanan
+   * Supertonic sedang mati. Audio itu bukan suara sungguhan sehingga elemen
+   * `<audio>` akan gagal diputar. Dulu kegagalan ini baru ketahuan setelah
+   * mencoba memutar — membuang waktu dan membuat perilaku terasa "kadang bisa,
+   * kadang tidak". Sekarang diperiksa lebih dulu.
+   */
+  function audioTtsSah(hasil: SpeechAudioResult | null): boolean {
+    if (!hasil?.audioBase64) return false;
+    if (hasil.fallback) return false;
+    if (hasil.provider === "mock") return false;
+    if (hasil.format === "mock") return false;
+    return true;
+  }
+
+  /**
+   * Ambil audio TTS sebuah teks dari cache klien, atau minta ke backend.
+   *
+   * Diberi percobaan ulang: layanan Supertonic lokal kadang menolak permintaan
+   * pertama setelah lama menganggur (model sedang dimuat). Percobaan kedua
+   * biasanya langsung berhasil, sehingga aplikasi tidak perlu jatuh ke suara
+   * browser hanya karena satu kegagalan sesaat.
+   */
   async function ambilAudioTts(teks: string): Promise<SpeechAudioResult | null> {
     const tersimpan = cacheTtsRef.current.get(teks);
     if (tersimpan) return tersimpan;
 
-    const hasil = await api.synthesize(teks).catch(() => null);
-    if (hasil?.audioBase64) {
+    let hasil: SpeechAudioResult | null = null;
+    for (let percobaan = 0; percobaan < 2; percobaan += 1) {
+      hasil = await api.synthesize(teks).catch(() => null);
+      if (audioTtsSah(hasil)) break;
+      if (percobaan === 0) {
+        const alasan = (hasil as (SpeechAudioResult & { fallbackReason?: string }) | null)?.fallbackReason;
+        debugSuara("tts-percobaan-ulang", { teks: teks.slice(0, 40), alasan: alasan ?? "tanpa audio" });
+        await new Promise((jeda) => window.setTimeout(jeda, 350));
+      }
+    }
+
+    if (audioTtsSah(hasil)) {
       // Batasi ukuran cache agar memori tetap wajar.
       if (cacheTtsRef.current.size >= 40) cacheTtsRef.current.clear();
-      cacheTtsRef.current.set(teks, hasil);
+      cacheTtsRef.current.set(teks, hasil as SpeechAudioResult);
+    } else {
+      // Semua percobaan gagal: segarkan status layanan TTS di latar belakang.
+      // `/api/tts/voices` memicu pemeriksaan ulang sidecar, sehingga permintaan
+      // berikutnya bisa langsung memakai Supertonic begitu layanannya siap —
+      // inilah yang membuat perilaku "kadang bisa, kadang tidak" hilang.
+      debugSuara("tts-semua-percobaan-gagal", { teks: teks.slice(0, 40) });
+      void api
+        .ttsVoices()
+        .then(() => api.health())
+        .then(setHealth)
+        .catch(() => null);
     }
     return hasil;
   }
 
   /**
-   * Cadangan bila audio TTS tidak tersedia: pakai `speechSynthesis` bawaan browser.
-   * Teks dinormalisasi lebih dulu (angka -> kata) dan bahasa dideteksi otomatis,
-   * lalu gerakan mulut dijalankan dari teks karena audio sistem tidak bisa dianalisis.
+   * Ucapkan teks memakai suara bawaan browser (jalur cadangan).
+   *
+   * Gerakan mulut avatar dijalankan dari teks dan dimulai seketika — tidak lagi
+   * bergantung pada kejadian `onstart` yang tidak selalu muncul. Bila browser
+   * sama sekali tidak punya suara terpasang, alur tetap lanjut setelah
+   * perkiraan durasi sehingga percakapan tidak pernah menggantung.
    */
-  function fallbackSpeechSynthesis(text: string) {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      return;
-    }
+  function ucapkanLewatBrowserSuara(text: string) {
     const lang = deteksiBahasa(text);
     const teksSiap = lang === "id" ? normalisasiTeksId(text) : normalisasiTeksEn(text);
+    debugSuara("pakai-suara-browser", { lang, adaSuara: browserPunyaSuara() });
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(teksSiap);
-    utterance.lang = lang === "id" ? "id-ID" : "en-US";
-    utterance.rate = 0.95;
-    utterance.onstart = () => {
-      setPracticeStatus("speaking");
-      setCoachState("asking");
-      stopVisemeTeksRef.current = mulaiVisemeDariTeks(text);
-    };
-    utterance.onend = () => {
-      stopVisemeTeksRef.current?.();
-      stopVisemeTeksRef.current = null;
-      setPracticeStatus("listening");
-      setCoachState("listening");
-    };
-    window.speechSynthesis.speak(utterance);
+    kendaliUcapBrowserRef.current = ucapkanDenganBrowser({
+      teks: text,
+      teksUcap: teksSiap,
+      lang,
+      rate: 0.95,
+      onMulai: () => {
+        setPracticeStatus("speaking");
+        setCoachState("asking");
+      },
+      onSelesai: () => {
+        kendaliUcapBrowserRef.current = null;
+        setPracticeStatus("listening");
+        setCoachState("listening");
+      }
+    });
   }
 
   /**
@@ -504,6 +597,20 @@ export default function App() {
    *    diputar seketika tanpa memanggil server lagi.
    * 3. AudioContext dibuka lebih awal lewat gesture pengguna sehingga audio
    *    langsung bisa dianalisis dan mulut 3D ikut bergerak.
+   */
+  /**
+   * Mengucapkan teks AI memakai TTS (Supertonic secara default) + lip sync.
+   *
+   * Empat cara latensi & keandalan dijaga:
+   * 1. Teks dipecah per kalimat, sehingga suara mulai terdengar setelah kalimat
+   *    pertama selesai disintesis (tidak menunggu seluruh paragraf).
+   * 2. Cache sisi klien — kalimat yang sama (sapaan, umpan balik berulang)
+   *    diputar seketika tanpa memanggil server lagi.
+   * 3. AudioContext dibuka lebih awal lewat gesture pengguna sehingga audio
+   *    langsung bisa dianalisis dan mulut 3D ikut bergerak.
+   * 4. Penggerak gerak mulut prosedural selalu dijalankan sebagai jaring
+   *    pengaman: bila analiser audio tidak menghasilkan sinyal (atau audio
+   *    memang berasal dari suara browser), mulut tetap bergerak.
    */
   async function speakText(text: string) {
     const teksBersih = text.trim();
@@ -531,30 +638,54 @@ export default function App() {
 
         const res = await ambilAudioTts(potongan[i]);
         if (generasi !== generasiSuaraRef.current) return;
-        if (!res?.audioBase64) throw new Error("audio-tts-tidak-tersedia");
+        // Audio mock / hasil cadangan bukan suara sungguhan: langsung ke suara browser.
+        if (!audioTtsSah(res)) throw new Error("audio-tts-tidak-tersedia");
+        const audioSah = res as SpeechAudioResult & { audioBase64: string };
 
-        const audio = new Audio(`data:audio/${res.format || "mp3"};base64,${res.audioBase64}`);
+        const audio = new Audio(`data:audio/${audioSah.format || "mp3"};base64,${audioSah.audioBase64}`);
         audioPlayerRef.current = audio;
 
         // Setiap potongan punya elemennya sendiri, jadi masing-masing perlu
         // didaftarkan ke analiser lip sync agar mulut tetap bergerak.
         const idSumber = siapDianalisis ? daftarkanElemenAudio(audio, `tts-${generasi}-${i}`) : null;
         lipsyncSourceRef.current = idSumber;
-        debugSuara("putar-potongan", { i, idSumber, format: res.format, byte: res.audioBase64.length });
+        debugSuara("putar-potongan", {
+          i,
+          idSumber,
+          format: audioSah.format,
+          byte: audioSah.audioBase64.length
+        });
+
+        // Jaring pengaman gerak mulut. Penggerak ini otomatis menyerahkan
+        // kendali ke analiser audio selama audio benar-benar bersuara, dan
+        // mengambil alih lagi bila audio berjalan tanpa sinyal yang terbaca.
+        hentikanGerakMulut();
+        let audioSedangMain = false;
+        kendaliMulutRef.current = mulaiGerakMulut(potongan[i], {
+          durasiMs:
+            typeof audioSah.durationEstimateSec === "number" ? audioSah.durationEstimateSec * 1000 : undefined,
+          audioAktif: () => audioSedangMain
+        });
 
         await new Promise<void>((selesai, gagal) => {
           pembatalSuaraRef.current = () => selesai();
+          audio.onplaying = () => {
+            audioSedangMain = true;
+          };
           audio.onended = () => {
+            audioSedangMain = false;
             pembatalSuaraRef.current = null;
             selesai();
           };
           audio.onerror = () => {
+            audioSedangMain = false;
             pembatalSuaraRef.current = null;
             gagal(new Error("pemutaran-audio-gagal"));
           };
           void audio.play().catch(gagal);
         });
 
+        hentikanGerakMulut();
         lepasSumberAudio(idSumber);
         lipsyncSourceRef.current = null;
       }
@@ -566,7 +697,7 @@ export default function App() {
       debugSuara("gagal-ke-cadangan", err instanceof Error ? err.message : String(err));
       // Dibatalkan oleh ucapan baru, atau TTS/autoplay gagal: pakai cadangan.
       if (generasi !== generasiSuaraRef.current) return;
-      fallbackSpeechSynthesis(text);
+      ucapkanLewatBrowserSuara(text);
     }
   }
 
@@ -610,12 +741,25 @@ export default function App() {
   /**
    * Mulai merekam dengan Web Speech Recognition.
    *
-   * `continuous = true` + pemulaian ulang di `onend` membuat perekaman tidak
-   * berhenti sendiri setelah beberapa kata (masalah "cuma terekam sampai
-   * hello test test"). Hasil final diakumulasi di `transkripFinalRef` agar
-   * tidak hilang ketika Chrome memulai sesi rekaman baru.
+   * Tiga hal penting:
+   *
+   * 1. `continuous = true` + pemulaian ulang di `onend` membuat perekaman tidak
+   *    berhenti sendiri setelah beberapa kata (masalah "cuma terekam sampai
+   *    hello test test"). Hasil final diakumulasi di `transkripFinalRef` agar
+   *    tidak hilang ketika Chrome memulai sesi rekaman baru.
+   *
+   * 2. Bahasa TIDAK lagi dikunci ke Inggris. Web Speech API memang hanya bisa
+   *    mengenali satu bahasa per sesi dan tidak punya mode deteksi otomatis,
+   *    jadi mode "Otomatis" di sini bekerja adaptif: setiap kali ada hasil
+   *    final, bahasanya diperiksa ulang; bila ternyata pengguna berbicara
+   *    Bahasa Indonesia, sesi rekaman berikutnya otomatis memakai `id-ID`
+   *    (dan sebaliknya). Pengguna juga bisa memilih bahasa secara manual
+   *    lewat tombol ID / EN di layar latihan.
+   *
+   * 3. Mengganti bahasa di tengah sesi dilakukan dengan menghentikan lalu
+   *    memulai ulang recognizer, karena `lang` tidak bisa diubah saat aktif.
    */
-  function mulaiMikrofon() {
+  function mulaiMikrofon(bahasaPaksa?: "id-ID" | "en-US") {
     const SpeechRecognition =
       (window as unknown as { SpeechRecognition?: any }).SpeechRecognition ||
       (window as unknown as { webkitSpeechRecognition?: any }).webkitSpeechRecognition;
@@ -631,8 +775,11 @@ export default function App() {
       // Membuka AudioContext pada gesture ini sekaligus (lihat pasangPembukaAudio).
       siapkanKonteksAudio();
 
+      // `bahasaPaksa` dipakai saat pengguna baru saja mengganti bahasa: nilai
+      // state React belum tentu sudah diperbarui pada closure ini.
+      const bahasaAwal = bahasaPaksa ?? (bahasaAsr === "auto" ? bahasaRecognitionRef.current : bahasaAsr);
       const recognition = new SpeechRecognition();
-      recognition.lang = "en-US";
+      recognition.lang = bahasaAwal;
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
@@ -642,14 +789,28 @@ export default function App() {
       recognition.onresult = (event: any) => {
         let finalBaru = "";
         let sementara = "";
+        let keyakinan = 0;
         for (let i = event.resultIndex; i < event.results.length; i += 1) {
           const hasil = event.results[i];
           const teks = hasil[0]?.transcript ?? "";
-          if (hasil.isFinal) finalBaru += teks;
-          else sementara += teks;
+          if (hasil.isFinal) {
+            finalBaru += teks;
+            keyakinan = Math.max(keyakinan, Number(hasil[0]?.confidence ?? 0));
+          } else {
+            sementara += teks;
+          }
         }
         if (finalBaru) {
           transkripFinalRef.current = `${transkripFinalRef.current} ${finalBaru}`.replace(/\s+/g, " ").trim();
+          // Mode otomatis: sesuaikan bahasa untuk sesi rekaman berikutnya.
+          if (bahasaAsr === "auto") {
+            const terdeteksi = deteksiBahasa(transkripFinalRef.current);
+            const target = terdeteksi === "id" ? "id-ID" : "en-US";
+            if (target !== bahasaRecognitionRef.current) {
+              bahasaRecognitionRef.current = target;
+              debugSuara("bahasa-asr-menyesuaikan", { target, keyakinan });
+            }
+          }
         }
         setUserAnswerText(`${transkripFinalRef.current} ${sementara}`.replace(/\s+/g, " ").trim());
         // Reset timer hening hanya saat ada kata yang benar-benar selesai.
@@ -659,6 +820,11 @@ export default function App() {
       recognition.onerror = (event: any) => {
         // "no-speech" & "aborted" bukan galat fatal: biarkan sesi rekaman lanjut.
         if (event?.error === "no-speech" || event?.error === "aborted") return;
+        if (event?.error === "language-not-supported" || event?.error === "not-allowed") {
+          // Bahasa tidak didukung / izin ditolak: jangan memaksa mengulang.
+          hentikanMikrofon();
+          return;
+        }
         hentikanMikrofon();
       };
 
@@ -667,6 +833,8 @@ export default function App() {
         // belum menekan tombol berhenti agar rekaman tetap utuh.
         if (micAktifRef.current) {
           try {
+            const bahasaBerikut = bahasaAsr === "auto" ? bahasaRecognitionRef.current : bahasaAsr;
+            if (recognition.lang !== bahasaBerikut) recognition.lang = bahasaBerikut;
             recognition.start();
             return;
           } catch {
@@ -698,6 +866,42 @@ export default function App() {
       return;
     }
     mulaiMikrofon();
+  }
+
+  /**
+   * Ganti bahasa pengenalan suara.
+   *
+   * Bila mikrofon sedang aktif, recognizer dihentikan dan langsung dimulai
+   * ulang dengan bahasa baru (properti `lang` tidak bisa diubah saat aktif),
+   * tanpa mengirim jawaban yang sedang disusun.
+   */
+  function gantiBahasaAsr(bahasa: BahasaAsr) {
+    setBahasaAsr(bahasa);
+    saveBahasaAsr(bahasa);
+
+    const target = bahasa === "auto" ? bahasaRecognitionRef.current : bahasa;
+    if (bahasa !== "auto") bahasaRecognitionRef.current = bahasa;
+
+    if (!micAktifRef.current) return;
+
+    const teksSementara = transkripFinalRef.current;
+
+    // Matikan penanda aktif LEBIH DULU supaya `onend` tidak sempat memulai
+    // ulang recognizer lama dengan bahasa lama (itu penyebab pilihan bahasa
+    // terasa tidak berpengaruh).
+    micAktifRef.current = false;
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      // Recognizer yang sudah mati bukan masalah.
+    }
+    recognitionRef.current = null;
+    setIsListeningMic(false);
+
+    window.setTimeout(() => {
+      transkripFinalRef.current = teksSementara;
+      mulaiMikrofon(target);
+    }, 140);
   }
 
   async function submitUserTurn(textToSend?: string) {
@@ -974,9 +1178,9 @@ export default function App() {
           </div>
           <div className="screen-tab-actions">
             {voiceSummary && (
-              <div className="api-pill voice-pill" title={`Mesin suara: ${voiceSummary.provider}`}>
+              <div className="api-pill voice-pill" title={`Mesin suara: ${voiceSummary.mesin}`}>
                 <Volume2 size={16} />
-                {voiceSummary.voice ? `${voiceSummary.voice} · ${voiceSummary.mode}` : voiceSummary.mode}
+                {voiceSummary.keterangan}
                 {voiceSummary.offline && <span className="pill-warning" aria-hidden="true" />}
               </div>
             )}
@@ -1004,11 +1208,9 @@ export default function App() {
               <section className="panel home-task">
                 <span className="eyebrow home-teacher-eyebrow">YOUR TEACHER IS LISTENING</span>
                 <h2 className="home-task-title just-say-title">
-                  <span>
-                    Just<span className="accent-dot">.</span>
-                  </span>
-                  <span>
-                    say it<span className="accent-dot">.</span>
+                  <span className="judul-baris">Just</span>
+                  <span className="judul-baris judul-baris-sorot">
+                    say it<span className="judul-titik">.</span>
                   </span>
                 </h2>
                 <p className="teacher-support-copy">
@@ -1261,9 +1463,9 @@ export default function App() {
                 {task.focus}
               </span>
               {voiceSummary && (
-                <span className="practice-chip voice">
+                <span className="practice-chip voice" title={`Mesin suara: ${voiceSummary.mesin}`}>
                   <Languages size={14} aria-hidden="true" />
-                  {voiceSummary.mode}
+                  {voiceSummary.mesin} · {voiceSummary.mode}
                 </span>
               )}
             </div>
@@ -1285,6 +1487,37 @@ export default function App() {
 
                 {practiceSession && practiceStatus !== "ended" && practiceStatus !== "completed" && (
                   <div className="speech-interaction-panel">
+                    <div className="asr-language-bar" role="group" aria-label="Bahasa pengenalan suara">
+                      <span className="asr-language-label">
+                        <Languages size={15} aria-hidden="true" />
+                        Bahasa yang dikenali
+                      </span>
+                      <div className="asr-language-options">
+                        {(
+                          [
+                            ["auto", "Otomatis", "Menyesuaikan sendiri antara Indonesia dan Inggris"],
+                            ["id-ID", "Indonesia", "Khusus ucapan Bahasa Indonesia"],
+                            ["en-US", "Inggris", "Khusus ucapan Bahasa Inggris"]
+                          ] as const
+                        ).map(([nilai, label, judul]) => (
+                          <button
+                            key={nilai}
+                            type="button"
+                            className={bahasaAsr === nilai ? "active" : ""}
+                            onClick={() => gantiBahasaAsr(nilai)}
+                            title={judul}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      {bahasaAsr === "auto" && (
+                        <span className="asr-language-active">
+                          Aktif: {bahasaRecognitionRef.current === "id-ID" ? "Indonesia" : "Inggris"}
+                        </span>
+                      )}
+                    </div>
+
                     <form
                       className="speech-input-bar"
                       onSubmit={(e) => {
@@ -1299,7 +1532,7 @@ export default function App() {
                         title={
                           isListeningMic
                             ? "Klik untuk berhenti dan kirim jawaban sekarang"
-                            : "Klik untuk bicara dalam bahasa Inggris (terkirim otomatis saat kamu berhenti)"
+                            : "Klik untuk bicara (Bahasa Indonesia atau Inggris) — jawaban terkirim otomatis saat kamu berhenti"
                         }
                       >
                         <Mic size={18} />
@@ -1309,7 +1542,7 @@ export default function App() {
                         type="text"
                         value={userAnswerText}
                         onChange={(e) => setUserAnswerText(e.target.value)}
-                        placeholder="Bicara lewat mic atau ketik jawaban dalam bahasa Inggris..."
+                        placeholder="Bicara lewat mic, atau ketik jawabanmu di sini..."
                         disabled={practiceStatus === "thinking"}
                       />
                       <button

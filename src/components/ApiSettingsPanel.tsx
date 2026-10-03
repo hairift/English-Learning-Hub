@@ -253,6 +253,31 @@ export function ApiSettingsPanel({
       .catch(() => setVoiceList(null));
   }, [open]);
 
+  /**
+   * Kunci scroll halaman selama panel terbuka.
+   *
+   * Tanpa ini, halaman di belakang panel ikut bergulir sehingga terasa seperti
+   * panel "tertutup" oleh bilah navigasi yang menempel di atas.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const sebelumnya = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = sebelumnya;
+    };
+  }, [open]);
+
+  /** Tombol Escape menutup panel — kebiasaan standar dialog. */
+  useEffect(() => {
+    if (!open) return;
+    const tanganiTombol = (kejadian: KeyboardEvent) => {
+      if (kejadian.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", tanganiTombol);
+    return () => window.removeEventListener("keydown", tanganiTombol);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   function update<K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) {

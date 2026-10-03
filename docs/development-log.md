@@ -162,6 +162,121 @@
   `rgb(255, 255, 255)`, lip sync detected, STT transcript auto-submitted and
   answered by the AI.
 
+### 2026-10-03 — Second bug-fix round: mouth, language, layout
+
+**The mouth never moved**
+
+* Root cause: lip sync depended entirely on tapping an `<audio>` element with
+  Web Audio. Whenever the coach's voice came from the browser's
+  `speechSynthesis` (audio the Web Audio API cannot reach), there was no signal
+  and the mouth stayed shut — which is exactly what happened on the hosted build.
+* Added `src/lipsync/gerakMulut.ts`: a procedural mouth driver that builds a
+  viseme timeline from the text and runs for as long as the coach speaks.
+* The driver yields to the audio analyser while real signal exists and takes
+  back over after 600 ms of silence, so accuracy is preserved when audio is
+  available and motion is guaranteed when it is not.
+* `speechSynthesis` `onboundary` events feed the character index into
+  `lompatKeKarakter()` so the mouth follows the word actually being spoken.
+* Mouth motion no longer waits for `utterance.onstart`, which browsers skip when
+  no matching voice is installed.
+
+**Speech recognition now understands Indonesian**
+
+* `recognition.lang` was hard-coded to `en-US`. It now follows a user-selectable
+  mode — `Otomatis` / `Indonesia` / `Inggris` — shown right above the answer bar.
+* `Otomatis` re-checks each final transcript with `deteksiBahasa()` and switches
+  the language for the next recognition session, because the Web Speech API
+  cannot auto-detect within a single session.
+* Changing the language while recording restarts the recogniser without sending
+  the answer in progress. The choice persists in `localStorage`.
+
+**TTS stopped wobbling**
+
+* `audioTtsSah()` rejects mock/fallback audio *before* an `<audio>` element is
+  built, instead of discovering the failure through a rejected `play()`.
+* `ambilAudioTts()` retries once after 350 ms.
+* `src/suaraBrowser.ts` selects the best browser voice by language code and a
+  curated name list, and adds a watchdog timer so a missing `onend` can never
+  hang the conversation.
+
+**Settings dialog was hidden behind the header**
+
+* `.settings-backdrop` used `z-index: 20` while the sticky header uses 50 and
+  45, so the panel slid underneath it. Now `z-index: 200`, height budgeted with
+  `100dvh`, body scroll locked while open, and closable with `Escape`.
+
+**Broken hero headline**
+
+* `.home-task-title span { display: block }` also matched the accent period
+  inside the heading, pushing it onto its own line — the heading rendered as
+  "Just" / "." / "say it" / ".". Scoped to `.judul-baris` only and redesigned
+  the heading with the brand-blue second line.
+
+**Responsive overhaul**
+
+* All breakpoints consolidated at the end of `src/styles.css` (1360 / 1180 /
+  980 / 768 / 520 / 380 px) so they are the final source of truth.
+* The navigation no longer stacks vertically on phones — both rows scroll
+  horizontally, keeping a stable header height.
+* Practice room, transcript panel, settings sheet, and answer bar all get
+  purpose-built tablet and phone layouts. `min-width: 0` on grid children
+  removes horizontal overflow.
+
+**Verification**
+
+* `npm run typecheck` → exit 0.
+* `npm test` → 19 files / 86 tests passed (new: `lipsyncMulut`, `bahasaAsr`).
+* `npm run build` → succeeded.
+* Playwright: the **actual morph target influences** on the face mesh are read
+  through `window.__selaMorph()` to prove the mouth moves; zero horizontal
+  overflow at 1024 px and 390 px; settings panel verified above the header.
+* Four new screenshots (`10`–`13`) capture the tablet and phone layouts.
+
+### 2026-10-03 — Third bug-fix round: the status label, and a TTS that stopped wobbling
+
+**The status label still covered the avatar**
+
+* The previous round reserved bottom padding on `.coach-stage` to make room for
+  `.coach-status`, which is `position: absolute`. Measuring the real geometry
+  showed why that could never be enough: the bilingual label wraps to two lines
+  and is **68 px** tall, while only 66 px had been reserved — an 18 px overlap on
+  desktop and tablet, worse on phones.
+* The stage is now a **two-row grid** (`grid-template-rows: auto auto`), with the
+  avatar in the first row and the label in the second. `position: static` on
+  `.coach-status` removes the absolute positioning entirely, so the label can no
+  longer overlap the avatar no matter how long the text becomes.
+* `.coach-avatar-wrap .sela-3d` now carries `max-width: 100%` with
+  `aspect-ratio: 1 / 1`, so the 230 px avatar never spills out of a 200 px
+  wrapper on small phones. The earlier selector targeted a direct child and
+  never matched — the avatar actually sits one level deeper, inside
+  `.coach-stage`.
+
+**Supertonic TTS "sometimes worked, sometimes did not"**
+
+* Verified the whole chain against a live sidecar: `/api/tts/synthesize` returned
+  real audio with `provider: supertonic`, `lang: id` for Indonesian and
+  `lang: en` for English. Cold synthesis ≈ 5.5 s, cached ≈ 0.12 s.
+* The first sentence after a cold start was the slow one, and that latency is
+  what read as instability. The app now fires one background `synthesize()` for
+  a short greeting on load, which warms the model and fills both caches.
+* When every attempt fails, `ambilAudioTts()` now calls `/api/tts/voices` in the
+  background — that endpoint re-probes the sidecar — and then refreshes
+  `/api/health`. Previously the app stayed on the browser voice until a reload
+  even after the sidecar had recovered.
+* The active engine is now stated in plain words in the navigation pill and the
+  practice chip: `Supertonic F1 · Auto ID/EN` or
+  `Suara browser (cadangan) · …`.
+
+**Verification**
+
+* `npx tsc --noEmit` → exit 0.
+* `npx vitest run` → 19 files / 86 tests passed.
+* `npm run build` → succeeded.
+* Geometry probe (`probe-panggung.mjs`) at 1500×1000, 1024×768 and 390×844
+  reports the avatar/status overlap directly.
+* `capture-docs3.mjs` now also records the TTS provider of every synthesis
+  request, and a failed screenshot no longer aborts the whole run.
+
 ### Conventions adopted
 
 * New code comments are written in **Bahasa Indonesia**.
@@ -334,6 +449,128 @@
 * Uji Playwright: 0 galat konsol, 0 permintaan gagal, warna judul kartu
   `rgb(255, 255, 255)`, lip sync terdeteksi, transkrip STT terkirim otomatis dan
   dijawab AI.
+
+### 2026-10-03 — Ronde perbaikan bug kedua: mulut, bahasa, tata letak
+
+**Mulut tidak pernah bergerak**
+
+* Akar masalah: lip sync sepenuhnya bergantung pada penyadapan elemen `<audio>`
+  lewat Web Audio. Setiap kali suara coach berasal dari `speechSynthesis` bawaan
+  browser (audio yang tidak bisa dijangkau Web Audio API), tidak ada sinyal sama
+  sekali dan mulut tetap tertutup — persis inilah yang terjadi pada versi yang
+  dipublikasikan.
+* Ditambahkan `src/lipsync/gerakMulut.ts`: penggerak gerak mulut prosedural yang
+  menyusun garis waktu viseme dari teks dan berjalan selama coach bicara.
+* Penggerak ini menyerahkan kendali ke analiser audio selama sinyal nyata masih
+  ada, dan mengambil alih kembali setelah 600 ms tanpa sinyal. Akurasi tetap
+  terjaga saat audio tersedia, dan gerakan dijamin ada saat audio tidak tersedia.
+* Kejadian `onboundary` dari `speechSynthesis` mengirim indeks karakter ke
+  `lompatKeKarakter()` sehingga mulut mengikuti kata yang benar-benar diucapkan.
+* Gerakan mulut tidak lagi menunggu `utterance.onstart`, yang sering dilewati
+  browser ketika tidak ada suara yang cocok terpasang.
+
+**Pengenalan suara kini mengerti Bahasa Indonesia**
+
+* `recognition.lang` dikunci ke `en-US`. Sekarang mengikuti mode yang bisa
+  dipilih pengguna — `Otomatis` / `Indonesia` / `Inggris` — tepat di atas bilah
+  jawaban.
+* Mode `Otomatis` memeriksa ulang setiap transkrip final dengan `deteksiBahasa()`
+  lalu mengganti bahasa untuk sesi rekaman berikutnya, karena Web Speech API
+  tidak bisa mendeteksi otomatis dalam satu sesi.
+* Mengganti bahasa saat merekam akan memulai ulang recognizer tanpa mengirim
+  jawaban yang sedang disusun. Pilihannya disimpan di `localStorage`.
+
+**TTS tidak lagi goyah**
+
+* `audioTtsSah()` menolak audio mock/cadangan **sebelum** elemen `<audio>`
+  dibuat, bukan setelah `play()` gagal.
+* `ambilAudioTts()` mencoba ulang sekali setelah 350 ms.
+* `src/suaraBrowser.ts` memilih suara browser terbaik berdasarkan kode bahasa
+  dan daftar nama pilihan, serta menambahkan pengaman waktu sehingga `onend`
+  yang tidak pernah datang tidak bisa menggantungkan percakapan.
+
+**Dialog pengaturan tertutup bilah kepala**
+
+* `.settings-backdrop` memakai `z-index: 20` sementara bilah kepala sticky
+  memakai 50 dan 45, sehingga panelnya menyelip di bawah. Sekarang
+  `z-index: 200`, tinggi memakai `100dvh`, scroll halaman dikunci saat terbuka,
+  dan bisa ditutup dengan `Escape`.
+
+**Judul hero rusak**
+
+* `.home-task-title span { display: block }` juga mengenai titik aksen di dalam
+  judul sehingga titik itu turun ke baris sendiri — judul tampil sebagai
+  "Just" / "." / "say it" / ".". Sekarang aturannya dibatasi ke `.judul-baris`
+  saja, dan judulnya dirancang ulang dengan baris kedua berwarna biru merek.
+
+**Rombak responsif**
+
+* Seluruh titik henti dikonsolidasikan di akhir `src/styles.css`
+  (1360 / 1180 / 980 / 768 / 520 / 380 px) agar menjadi sumber kebenaran akhir.
+* Navigasi tidak lagi menumpuk vertikal di ponsel — kedua barisnya digeser
+  mendatar sehingga tinggi bilah kepala tetap stabil.
+* Ruang latihan, panel transkrip, lembar pengaturan, dan bilah jawaban semuanya
+  mendapat tata letak khusus tablet dan ponsel. `min-width: 0` pada anak grid
+  menghilangkan luapan mendatar.
+
+**Verifikasi**
+
+* `npm run typecheck` → exit 0.
+* `npm test` → 19 berkas / 86 tes lulus (baru: `lipsyncMulut`, `bahasaAsr`).
+* `npm run build` → berhasil.
+* Playwright: **nilai morph target yang benar-benar diterapkan** pada mesh wajah
+  dibaca lewat `window.__selaMorph()` untuk membuktikan mulut bergerak; nol
+  luapan mendatar pada 1024 px dan 390 px; panel pengaturan terverifikasi berada
+  di atas bilah kepala.
+* Empat tangkapan layar baru (`10`–`13`) merekam tata letak tablet dan ponsel.
+
+### 2026-10-03 — Ronde perbaikan bug ketiga: label status dan TTS yang berhenti goyah
+
+**Label status masih menutupi avatar**
+
+* Ronde sebelumnya menambah padding bawah pada `.coach-stage` untuk memberi ruang
+  bagi `.coach-status` yang bersifat `position: absolute`. Pengukuran geometri
+  nyata menunjukkan kenapa cara itu tidak akan pernah cukup: label dua bahasa ini
+  membungkus menjadi dua baris dengan tinggi **68 px**, sedangkan yang disisakan
+  hanya 66 px — tumpang tindih 18 px di desktop dan tablet, lebih parah di ponsel.
+* Panggung sekarang menjadi **grid dua baris** (`grid-template-rows: auto auto`),
+  avatar di baris pertama dan label di baris kedua. `position: static` pada
+  `.coach-status` menghapus posisi absolutnya, sehingga label tidak mungkin lagi
+  menutupi avatar, sepanjang apa pun teksnya.
+* `.coach-avatar-wrap .sela-3d` kini memakai `max-width: 100%` dengan
+  `aspect-ratio: 1 / 1`, sehingga avatar 230 px tidak meluber dari pembungkus
+  200 px di ponsel kecil. Selektor sebelumnya menargetkan anak langsung dan tidak
+  pernah cocok — avatar sebenarnya berada satu tingkat lebih dalam, di dalam
+  `.coach-stage`.
+
+**TTS Supertonic "kadang bisa, kadang tidak"**
+
+* Seluruh rantai diuji terhadap sidecar yang hidup: `/api/tts/synthesize`
+  mengembalikan audio nyata dengan `provider: supertonic`, `lang: id` untuk
+  Bahasa Indonesia dan `lang: en` untuk Bahasa Inggris. Sintesis dingin ≈ 5,5
+  detik, dari cache ≈ 0,12 detik.
+* Kalimat pertama setelah aplikasi baru dibuka adalah yang paling lambat, dan
+  latensi itulah yang terbaca sebagai ketidakstabilan. Aplikasi sekarang
+  menjalankan satu `synthesize()` latar untuk sapaan pendek saat dimuat, yang
+  memanaskan model sekaligus mengisi kedua cache.
+* Bila semua percobaan gagal, `ambilAudioTts()` kini memanggil `/api/tts/voices`
+  di latar belakang — endpoint itu memeriksa ulang sidecar — lalu menyegarkan
+  `/api/health`. Sebelumnya aplikasi tetap memakai suara browser sampai halaman
+  dimuat ulang walaupun sidecar sudah hidup kembali.
+* Mesin suara yang aktif kini dinyatakan dengan kata-kata jelas pada chip
+  navigasi dan chip ruang latihan: `Supertonic F1 · Auto ID/EN` atau
+  `Suara browser (cadangan) · …`.
+
+**Verifikasi**
+
+* `npx tsc --noEmit` → keluar 0.
+* `npx vitest run` → 19 berkas / 86 tes lulus.
+* `npm run build` → berhasil.
+* Probe geometri (`probe-panggung.mjs`) pada 1500×1000, 1024×768, dan 390×844
+  melaporkan tumpang tindih avatar/label secara langsung.
+* `capture-docs3.mjs` kini juga mencatat provider TTS setiap permintaan
+  sintesis, dan kegagalan satu tangkapan layar tidak lagi menggagalkan seluruh
+  proses.
 
 ### Konvensi yang diadopsi
 

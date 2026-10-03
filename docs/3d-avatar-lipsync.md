@@ -17,7 +17,7 @@ coach's audio. This replaces the previous 2D animation.
 | Model | Blender → GLB | Sela's rig, morph targets, animation clips |
 | Renderer | `three@0.186.1`, `@react-three/fiber@9.8.1`, `@react-three/drei@10.7.9` | Canvas, camera, lighting, animation mixer |
 | Lip sync | Web Audio API `AnalyserNode` | Turn audio amplitude + spectrum into visemes |
-| Fallback | Text-driven visemes | Keep the mouth moving when audio analysis is unavailable |
+| Fallback | `src/lipsync/gerakMulut.ts` | Procedural mouth motion from the text — runs for **every** utterance, so the mouth always moves |
 | Wiring | `src/lipsync/*` + `src/components/Sela3D*.tsx` | Glue everything together |
 
 ### 2. Assets
@@ -153,18 +153,57 @@ gesture occurs, and `resume()` is asynchronous. Because of that:
 Getting this wrong is exactly why "lip sync does not work" happens: the audio plays,
 but the analyser was never attached.
 
-#### 6.2 Text path (fallback)
+#### 6.2 Procedural path — the safety net that is always on
 
-When audio analysis is unavailable, `visemeDariTeks.ts` estimates a viseme
-sequence directly from the text:
+Audio analysis alone is not enough, because two very common situations produce
+**no analysable signal at all**:
 
-* `perkirakanDurasiMs(teks)` — rough duration estimate.
-* `susunBingkaiViseme(teks)` — builds `[{ viseme, durasiMs }]` frames.
-* `mulaiVisemeDariTeks(teks, onSelesai)` — plays the sequence and returns a
-  cancel function.
+1. The coach's voice comes from the browser's `speechSynthesis`. That is system
+   audio; the Web Audio API cannot reach it.
+2. The local Supertonic service is offline, so the app falls back to (1).
 
-This guarantees the mouth still moves even if the browser blocks audio
-analysis.
+In both cases the mouth used to stay shut. `src/lipsync/gerakMulut.ts` fixes
+this by driving the mouth from the text itself, and it is **started for every
+spoken chunk**, not only as a last resort:
+
+```ts
+kendaliMulutRef.current = mulaiGerakMulut(potongan[i], {
+  durasiMs: audioSah.durationEstimateSec * 1000,
+  audioAktif: () => audioSedangMain      // true while the <audio> element plays
+});
+```
+
+Control is handed back and forth automatically:
+
+| Condition | Who drives the mouth |
+| --- | --- |
+| `audioAktif()` is true **and** the analyser reports real signal | Audio analyser — accurate phonetics |
+| `audioAktif()` is true but no signal for 600 ms | Procedural driver takes over (broken decode, silent element) |
+| No audio at all (`speechSynthesis`, mock audio) | Procedural driver |
+| Audio finished | Mouth closes smoothly, then stops |
+
+How the procedural timeline is built:
+
+* `visemeHuruf()` maps each letter to a mouth shape. Bilabials (`m`, `b`, `p`)
+  close the lips; open vowels (`a`) widen it; narrow vowels (`i`, `u`) shrink it.
+* `susunBingkaiMulut(teks, durasiMs)` builds `[{ viseme, durasiMs }]` frames.
+  Spaces get 1.5× and punctuation 2.6× the weight of a letter, so the mouth
+  visibly pauses when the speaker breathes.
+* Frames are interpolated and smoothed (`PELEMBUT = 0.34`) so motion never jitters.
+* `perkirakanDurasiUcapanMs(teks)` estimates length at ~2.6 words/second, with a
+  500 ms floor.
+
+`KendaliMulut` exposes three methods:
+
+| Method | Used by |
+| --- | --- |
+| `hentikan()` | Stop and close the mouth |
+| `lompatKeKarakter(indeks)` | `SpeechSynthesisUtterance.onboundary` — keeps the mouth on the word actually being spoken |
+| `setelDurasi(ms)` | Re-stretch the timeline once the real audio duration is known |
+
+> **Important:** mouth motion must never wait for `utterance.onstart`. Browsers
+> skip that event when no matching voice is installed, which is why the driver
+> starts immediately in `ucapkanDenganBrowser()`.
 
 #### 6.3 Shared state
 
@@ -406,17 +445,59 @@ gesture pengguna, dan `resume()` bersifat asinkron. Karena itu:
 Kesalahan di titik inilah penyebab kasus "lip sync tidak berfungsi": suara terdengar,
 tetapi analiser tidak pernah tersambung.
 
-#### 6.2 Jalur teks (cadangan)
+#### 6.2 Jalur prosedural — jaring pengaman yang selalu menyala
 
-Bila analisis audio tidak tersedia, `visemeDariTeks.ts` memperkirakan urutan
-viseme langsung dari teks:
+Analisis audio saja tidak cukup, karena dua situasi yang sangat umum sama sekali
+**tidak menghasilkan sinyal yang bisa dianalisis**:
 
-* `perkirakanDurasiMs(teks)` — perkiraan durasi kasar.
-* `susunBingkaiViseme(teks)` — menyusun bingkai `[{ viseme, durasiMs }]`.
-* `mulaiVisemeDariTeks(teks, onSelesai)` — memutar urutan dan mengembalikan
-  fungsi pembatalan.
+1. Suara coach berasal dari `speechSynthesis` bawaan browser. Itu audio sistem;
+   Web Audio API tidak bisa menjangkaunya.
+2. Layanan Supertonic lokal sedang mati, sehingga aplikasi jatuh ke kondisi (1).
 
-Ini menjamin mulut tetap bergerak walau browser memblokir analisis audio.
+Pada kedua kasus itu mulut dulu tetap tertutup. `src/lipsync/gerakMulut.ts`
+memperbaikinya dengan menggerakkan mulut dari teksnya sendiri, dan penggerak ini
+**dinyalakan untuk setiap potongan ucapan**, bukan hanya sebagai pilihan terakhir:
+
+```ts
+kendaliMulutRef.current = mulaiGerakMulut(potongan[i], {
+  durasiMs: audioSah.durationEstimateSec * 1000,
+  audioAktif: () => audioSedangMain      // true selama elemen <audio> diputar
+});
+```
+
+Kendali berpindah otomatis:
+
+| Kondisi | Siapa yang menggerakkan mulut |
+| --- | --- |
+| `audioAktif()` true **dan** analiser membaca sinyal nyata | Analiser audio — fonetik akurat |
+| `audioAktif()` true tetapi 600 ms tanpa sinyal | Penggerak prosedural mengambil alih (dekode rusak, elemen senyap) |
+| Tidak ada audio sama sekali (`speechSynthesis`, audio mock) | Penggerak prosedural |
+| Audio selesai | Mulut menutup halus, lalu berhenti |
+
+Cara garis waktu prosedural disusun:
+
+* `visemeHuruf()` memetakan setiap huruf ke bentuk mulut. Konsonan bilabial
+  (`m`, `b`, `p`) menutup bibir; vokal terbuka (`a`) melebarkan; vokal sempit
+  (`i`, `u`) menyempitkan.
+* `susunBingkaiMulut(teks, durasiMs)` menyusun bingkai `[{ viseme, durasiMs }]`.
+  Spasi berbobot 1,5× dan tanda baca 2,6× dibanding huruf, sehingga mulut
+  terlihat berhenti saat pembicara mengambil napas.
+* Bingkai diinterpolasi dan dilembutkan (`PELEMBUT = 0.34`) agar gerakan tidak
+  bergetar.
+* `perkirakanDurasiUcapanMs(teks)` memperkirakan panjang ucapan pada ±2,6 kata
+  per detik, dengan batas bawah 500 ms.
+
+`KendaliMulut` menyediakan tiga metode:
+
+| Metode | Dipakai oleh |
+| --- | --- |
+| `hentikan()` | Menghentikan dan menutup mulut |
+| `lompatKeKarakter(indeks)` | `SpeechSynthesisUtterance.onboundary` — menjaga mulut tetap pada kata yang benar-benar diucapkan |
+| `setelDurasi(ms)` | Menyesuaikan ulang garis waktu setelah durasi audio nyata diketahui |
+
+> **Penting:** gerakan mulut tidak boleh menunggu `utterance.onstart`. Browser
+> melewati kejadian itu ketika tidak ada suara yang cocok terpasang, karena
+> itulah penggeraknya langsung dimulai di `ucapkanDenganBrowser()`.
 
 #### 6.3 State bersama
 
@@ -493,6 +574,15 @@ Setup studio sederhana — tanpa berkas HDR eksternal:
 * Menampilkan cadangan statis bila WebGL tidak tersedia.
 * Menampilkan cadangan saat pemandangan lazy masih suspended.
 * Jatuh ke foto bila pemandangan melempar galat (pembatas galat).
+
+`tests/lipsyncMulut.test.ts` menguji mesin gerak mulut: bingkai viseme per kelas
+huruf, penjumlahan durasi, perkiraan durasi ucapan, pemulihan state ke posisi
+diam, dan pemilihan suara browser.
+
+Untuk verifikasi tingkat browser, `window.__selaMorph()` (aktif hanya bila
+`window.__SELA_DEBUG__` diset) memaparkan **nilai morph target yang benar-benar
+diterapkan** ke mesh wajah. Skrip `capture-docs3.mjs` memakainya untuk
+membuktikan mulut bergerak, bukan sekadar mengandalkan perubahan state.
 
 Karena `Sela3DScene` lazy dan bergerbang WebGL, seluruh suite berjalan di jsdom
 tanpa GPU.

@@ -39,6 +39,21 @@ const KLIP = {
 /** Klip yang sengaja tidak dipakai (animasi morph eksperimental). */
 const KLIP_DILEWATI = new Set(["Talking_%temp"]);
 
+/**
+ * Kait diagnostik (opt-in).
+ *
+ * Bila `window.__SELA_DEBUG__ = true` diset SEBELUM aplikasi dimuat, nilai
+ * morph target yang benar-benar diterapkan ke mesh wajah dipaparkan lewat
+ * `window.__selaMorph()`. Ini memungkinkan pemeriksaan otomatis memastikan
+ * mulut avatar benar-benar bergerak, bukan hanya "state-nya berubah".
+ */
+declare global {
+  interface Window {
+    __SELA_DEBUG__?: boolean;
+    __selaMorph?: () => Record<string, number>;
+  }
+}
+
 /** Menentukan klip animasi berdasarkan status pelatih. */
 function pilihKlip(state: CoachState, bersuara: boolean): string {
   if (state === "celebrating") return KLIP.sapaan;
@@ -166,6 +181,21 @@ function ModelSela({ state }: { state: CoachState }) {
       lipsync.kebukaan,
       sedangKedip
     );
+
+    // Kait diagnostik: laporkan nilai morph yang BENAR-BENAR diterapkan.
+    if (typeof window !== "undefined" && window.__SELA_DEBUG__) {
+      const pertama = meshMorph[0];
+      if (pertama) {
+        window.__selaMorph = () => ({
+          a: Number((pertama.pengaruh[pertama.kamus.a] ?? 0).toFixed(3)),
+          i: Number((pertama.pengaruh[pertama.kamus.i] ?? 0).toFixed(3)),
+          u: Number((pertama.pengaruh[pertama.kamus.u] ?? 0).toFixed(3)),
+          e: Number((pertama.pengaruh[pertama.kamus.e] ?? 0).toFixed(3)),
+          o: Number((pertama.pengaruh[pertama.kamus.o] ?? 0).toFixed(3)),
+          kebukaan: Number(lipsync.kebukaan.toFixed(3))
+        });
+      }
+    }
 
     // Gerakan halus kepala & tubuh agar tidak terlihat kaku.
     if (grup.current) {

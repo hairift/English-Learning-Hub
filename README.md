@@ -65,6 +65,16 @@ There is no fixed quiz bank and no round counter. You just talk.
 
 ![Evaluation report](docs/screenshots/09-laporan.png)
 
+**Tablet (1024 px) and phone (390 px) — purpose-built layouts, no horizontal overflow**
+
+![Home on tablet](docs/screenshots/10-tablet-beranda.png)
+
+![Practice on tablet](docs/screenshots/11b-tablet-ruang-latihan.png)
+
+![Home on mobile](docs/screenshots/12-mobile-beranda.png)
+
+![Practice on mobile](docs/screenshots/13b-mobile-ruang-latihan.png)
+
 ## 2. Feature list
 
 | Area | What it does |
@@ -72,13 +82,16 @@ There is no fixed quiz bank and no round counter. You just talk.
 | **Scenario practice** | Built-in interview / meeting / restaurant scenarios plus a fully custom scenario builder (scene name, AI role, task title, focus, opening question). |
 | **Real-time voice** | Continuous spoken conversation via the Pipecat WebRTC agent when available; otherwise falls back to backend TTS + browser speech synthesis. |
 | **On-device TTS** | Supertonic 3 runs locally through a Python sidecar. Default voice is female Indonesian (`F1`), and the language switches automatically per sentence between Indonesian and English. |
+| **Reliable voice engine** | Mock/fallback audio is rejected before playback, TTS requests retry once, and the browser fallback picks the best installed voice by language with a watchdog so a conversation can never hang. |
 | **Number normalisation** | Raw numbers are converted to words before synthesis so TTS never mis-reads them. Handles currency, percentages, clock times, decimals, thousands separators, and per-digit spelling for phone numbers / NIK / OTP codes. |
 | **3D avatar** | A rigged GLB character rendered with Three.js / React Three Fiber, with idle, talking, thinking and greeting animation clips. |
-| **Lip sync** | Mouth shapes are driven by real audio analysis (RMS + three frequency bands mapped to five visemes), with a text-driven fallback when audio cannot be analysed. |
+| **Lip sync** | Mouth shapes come from real audio analysis (RMS + three frequency bands mapped to five visemes). A procedural text-driven driver runs alongside it, so the mouth moves even when the voice comes from the browser's speech synthesis and cannot be analysed at all. |
+| **Bilingual speech recognition** | Speech-to-text understands **both Indonesian and English**. Pick `Otomatis` / `Indonesia` / `Inggris` right above the answer bar; auto mode adapts between recognition sessions. |
 | **Live transcript** | Every user and AI turn is captured, auto-scrolled, with an "N new messages" jump button when you scroll up. |
 | **Evaluation report** | LLM-generated 7-dimension score (fluency, pronunciation, grammar, vocabulary, coherence, task completion, interaction), sentence-level before/after fixes, expression upgrades, pronunciation tips and a next-practice plan. |
-| **Progress tracking** | Daily check-in, streak, growth trail, per-session history stored in `localStorage`. |
+| **Progress tracking** | Daily check-in, streak, growth trail, per-session history stored in `localStorage` — all derived from real practice data, never placeholder numbers. |
 | **Provider settings** | Configure LLM, ASR, TTS and pronunciation providers from the UI — including bring-your-own API keys, presets, and a live voice preview. |
+| **Responsive layout** | Purpose-built breakpoints for desktop, laptop, tablet landscape, tablet portrait, phone and small phone. Navigation stays on one scrollable row and nothing overflows horizontally. |
 | **Mock mode** | The whole app works with zero API keys for demos and offline testing. |
 
 ## 3. Architecture
@@ -257,7 +270,7 @@ See [`docs/3d-avatar-lipsync.md`](docs/3d-avatar-lipsync.md).
 ## 8. Testing
 
 ```bash
-npm test          # 17 test files / 73 tests
+npm test          # 19 test files / 86 tests
 npm run typecheck # tsc --noEmit
 npm run build     # production build
 ```
@@ -338,6 +351,16 @@ Tidak ada bank soal dan tidak ada hitungan ronde. Anda cukup berbicara.
 
 ![Laporan evaluasi](docs/screenshots/09-laporan.png)
 
+**Tablet (1024 px) dan ponsel (390 px) — tata letak khusus, tanpa luapan mendatar**
+
+![Beranda di tablet](docs/screenshots/10-tablet-beranda.png)
+
+![Latihan di tablet](docs/screenshots/11b-tablet-ruang-latihan.png)
+
+![Beranda di ponsel](docs/screenshots/12-mobile-beranda.png)
+
+![Latihan di ponsel](docs/screenshots/13b-mobile-ruang-latihan.png)
+
 ## 2. Daftar fitur
 
 | Bagian | Fungsi |
@@ -345,13 +368,16 @@ Tidak ada bank soal dan tidak ada hitungan ronde. Anda cukup berbicara.
 | **Latihan skenario** | Skenario bawaan wawancara / rapat / restoran, plus pembuat skenario kustom (nama scene, peran AI, judul tugas, fokus, pertanyaan pembuka). |
 | **Suara real-time** | Percakapan suara mengalir lewat agen WebRTC Pipecat bila tersedia; jika tidak, otomatis memakai TTS backend + speech synthesis browser. |
 | **TTS on-device** | Supertonic 3 berjalan lokal lewat sidecar Python. Suara default perempuan Indonesia (`F1`), dan bahasanya berganti otomatis per kalimat antara Indonesia dan Inggris. |
+| **Mesin suara yang andal** | Audio mock/cadangan ditolak sebelum diputar, permintaan TTS dicoba ulang sekali, dan cadangan browser memilih suara terbaik sesuai bahasa dengan pengaman waktu agar percakapan tidak pernah menggantung. |
 | **Normalisasi angka** | Angka mentah diubah menjadi kata sebelum sintesis agar TTS tidak salah baca. Menangani mata uang, persen, jam, desimal, pemisah ribuan, dan ejaan per digit untuk nomor HP / NIK / kode OTP. |
 | **Avatar 3D** | Karakter GLB ber-rig yang dirender dengan Three.js / React Three Fiber, dengan klip animasi idle, bicara, berpikir, dan sapaan. |
-| **Lip sync** | Bentuk mulut digerakkan dari analisis audio nyata (RMS + tiga pita frekuensi yang dipetakan ke lima viseme), dengan cadangan berbasis teks saat audio tidak bisa dianalisis. |
+| **Lip sync** | Bentuk mulut berasal dari analisis audio nyata (RMS + tiga pita frekuensi yang dipetakan ke lima viseme). Penggerak prosedural dari teks berjalan berdampingan, sehingga mulut tetap bergerak walau suara berasal dari sintesis browser yang tidak bisa dianalisis sama sekali. |
+| **Pengenalan suara bilingual** | Speech-to-text mengerti **Bahasa Indonesia dan Inggris**. Pilih `Otomatis` / `Indonesia` / `Inggris` tepat di atas bilah jawaban; mode otomatis menyesuaikan diri antar sesi rekaman. |
 | **Transkrip langsung** | Setiap giliran pengguna dan AI dicatat, otomatis digulir, plus tombol lompat "N pesan baru" saat Anda menggulir ke atas. |
 | **Laporan evaluasi** | Skor 7 dimensi dari LLM (kelancaran, pengucapan, tata bahasa, kosakata, koherensi, penyelesaian tugas, interaksi), koreksi kalimat sebelum/sesudah, peningkatan ekspresi, tips pengucapan, dan rencana latihan berikutnya. |
-| **Pelacakan progres** | Check-in harian, streak, jejak pertumbuhan, dan riwayat tiap sesi yang disimpan di `localStorage`. |
+| **Pelacakan progres** | Check-in harian, streak, jejak pertumbuhan, dan riwayat tiap sesi yang disimpan di `localStorage` — semuanya diturunkan dari data latihan nyata, bukan angka contoh. |
 | **Pengaturan provider** | Atur provider LLM, ASR, TTS, dan penilaian pengucapan dari UI — termasuk memakai kunci API sendiri, preset siap pakai, dan pratinjau suara langsung. |
+| **Tata letak responsif** | Titik henti khusus untuk desktop, laptop, tablet lanskap, tablet potret, ponsel, dan ponsel kecil. Navigasi tetap satu baris yang bisa digeser dan tidak ada luapan mendatar. |
 | **Mode mock** | Seluruh aplikasi bisa berjalan tanpa kunci API sama sekali untuk demo dan pengujian offline. |
 
 ## 3. Arsitektur

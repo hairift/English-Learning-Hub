@@ -2154,18 +2154,41 @@ textarea:focus,
 .settings-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  /* WAJIB lebih tinggi dari navbar sticky (.brand-top-bar z-index 50,
+     .screen-tabs z-index 45) supaya panel tidak tertutup bilah navigasi. */
+  z-index: 200;
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(75, 75, 75, 0.28);
+  background: rgba(20, 40, 70, 0.42);
+  backdrop-filter: blur(2px);
+  overscroll-behavior: contain;
 }
 
 .settings-panel {
   width: min(860px, 100%);
-  max-height: min(760px, calc(100vh - 40px));
+  max-height: min(760px, calc(100dvh - 40px));
   overflow: auto;
   padding: 28px;
+  /* Panel muncul dengan animasi halus agar terasa sengaja, bukan "nyangkut". */
+  animation: settings-muncul 180ms var(--coach-motion, ease-out);
+}
+
+@keyframes settings-muncul {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-panel {
+    animation: none;
+  }
 }
 
 .settings-header {
@@ -3595,24 +3618,39 @@ body:has(.one-report) .api-pill {
   letter-spacing: 0.07em;
 }
 
-.home-task h2.just-say-title {
-  margin: 18px 0 12px;
-  max-width: 580px;
-  color: var(--eel);
-  font-size: clamp(58px, 5.2vw, 76px);
-  font-weight: 950;
-  line-height: 0.88;
-  letter-spacing: 0;
+/* Judul hero.
+   CATATAN PENTING: dulu ada aturan `.home-task-title span { display: block }`
+   yang juga mengenai elemen titik di dalam judul, sehingga titik aksen turun
+   ke barisnya sendiri dan judul tampak rusak ("Just" / "." / "say it" / ".").
+   Sekarang hanya kelas `.judul-baris` yang dijadikan blok, dan titiknya
+   dipastikan tetap inline. */
+.home-task-title span {
+  display: inline;
+  white-space: normal;
 }
 
-.just-say-title > span {
+.home-task h2.just-say-title {
+  margin: 16px 0 14px;
+  max-width: 580px;
+  color: var(--eel);
+  font-size: clamp(44px, 4.6vw, 70px);
+  font-weight: 950;
+  line-height: 0.96;
+  letter-spacing: -0.02em;
+}
+
+.just-say-title .judul-baris {
   display: block;
   white-space: nowrap;
 }
 
-.just-say-title .green-dot {
-  color: var(--feather-green);
+.just-say-title .judul-baris-sorot {
+  color: var(--biru-utama);
+}
+
+.just-say-title .judul-titik {
   display: inline;
+  color: var(--biru-terang);
 }
 
 .teacher-support-copy {
@@ -3863,7 +3901,8 @@ body:has(.one-report) .api-pill {
   display: block;
   margin-top: 4px;
   color: var(--eel);
-  font-size: 23px;
+  /* Ukuran menyesuaikan lebar kartu supaya tidak meluber di kolom sempit. */
+  font-size: clamp(17px, 1.6vw, 23px);
   font-weight: 950;
   letter-spacing: 0;
 }
@@ -3879,7 +3918,21 @@ body:has(.one-report) .api-pill {
 .growth-trail-card .growth-trail-trend {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
+  /* Teks tren ("Belum ada tren") bisa lebih lebar dari kolom kartu di layar
+     sempit; biarkan membungkus rapi alih-alih meluber keluar kartu. */
+  overflow-wrap: anywhere;
+}
+
+/* Kolom teks kartu tren boleh menyusut agar tidak mendorong tombol keluar. */
+.growth-trail-card > div {
+  min-width: 0;
+}
+
+.growth-trail-trend svg {
+  flex: 0 0 auto;
 }
 
 .growth-trail-button {
@@ -5085,3 +5138,556 @@ button.danger {
   color: var(--biru-terang);
 }
 
+
+/* ============================================================
+   Pemilih bahasa pengenalan suara (ASR)
+   ============================================================ */
+
+.asr-language-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 2px dashed var(--biru-terang);
+  border-radius: 16px;
+  padding: 8px 12px;
+  background: var(--biru-muda-bg);
+}
+
+.asr-language-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--biru-gelap);
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.asr-language-options {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 2px solid #cfe2ff;
+  border-radius: 999px;
+  background: var(--snow);
+}
+
+.asr-language-options button {
+  min-height: 34px;
+  border: none;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--wolf);
+  font-size: 0.82rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.asr-language-options button:hover {
+  color: var(--biru-gelap);
+}
+
+.asr-language-options button.active {
+  background: var(--biru-utama);
+  color: var(--snow);
+}
+
+.asr-language-active {
+  color: var(--biru-gelap);
+  font-size: 0.76rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Tata letak responsif — desktop besar, laptop, tablet, mobile
+   ------------------------------------------------------------
+   Disusun dari layar terbesar ke terkecil. Ditulis di akhir berkas
+   supaya menjadi sumber kebenaran terakhir dan tidak berbenturan
+   dengan aturan media query lama yang tersebar di atas.
+   ============================================================ */
+
+/* Grid anak tidak boleh melebar melebihi kolomnya. */
+.home-task,
+.home-coach,
+.home-growth,
+.practice-grid > *,
+.report-grid > *,
+.settings-grid > * {
+  min-width: 0;
+}
+
+/* ---------- Laptop besar & desktop sedang (<= 1360px) ---------- */
+@media (max-width: 1360px) {
+  .app-shell {
+    padding: 40px 28px 80px;
+  }
+
+  .screen-tabs-inner {
+    padding: 10px 28px;
+  }
+
+  .home-hero {
+    grid-template-columns: minmax(0, 1.05fr) minmax(280px, 1fr) minmax(280px, 0.92fr);
+    gap: 18px;
+  }
+
+  .home-task h2.just-say-title {
+    font-size: clamp(40px, 4vw, 58px);
+  }
+}
+
+/* ---------- Tablet lanskap & laptop kecil (<= 1180px) ---------- */
+@media (max-width: 1180px) {
+  .home-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  /* Kartu progres turun ke baris kedua dengan lebar penuh. */
+  .home-growth {
+    grid-column: 1 / -1;
+    min-height: auto;
+  }
+
+  .practice-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .voice-log-side {
+    min-height: auto;
+  }
+
+  .voice-only-log {
+    min-height: 320px;
+    max-height: 420px;
+  }
+}
+
+/* ---------- Tablet potret (<= 980px) ---------- */
+@media (max-width: 980px) {
+  .app-shell {
+    padding: 28px 20px 72px;
+  }
+
+  .screen-tabs-inner {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 20px;
+  }
+
+  /* Navigasi tetap satu baris dan bisa digeser mendatar, bukan menumpuk. */
+  .screen-tab-list {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .screen-tab-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .screen-tab {
+    flex: 0 0 auto;
+    padding: 0 14px;
+    white-space: nowrap;
+  }
+
+  .screen-tab-actions {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+  }
+
+  .home-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-task,
+  .home-coach,
+  .home-growth {
+    min-height: auto;
+  }
+
+  .stage.dialogue-room {
+    min-height: 0;
+    padding: 20px 16px;
+    gap: 16px;
+  }
+
+  .coach-focus {
+    min-height: 0;
+    gap: 14px;
+  }
+
+  .coach-avatar-wrap {
+    width: min(240px, 100%);
+    min-height: 240px;
+  }
+
+  .voice-primary-controls {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  /* Panel pengaturan menjadi lembar penuh dengan gulir internal. */
+  .settings-backdrop {
+    padding: 12px;
+    place-items: stretch;
+  }
+
+  .settings-panel {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .preset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Mobile besar & tablet kecil (<= 768px) ---------- */
+@media (max-width: 768px) {
+  .app-shell {
+    padding: 22px 16px 64px;
+  }
+
+  .brand-top-bar-inner {
+    padding: 0 16px;
+  }
+
+  .brand-top-note {
+    display: none;
+  }
+
+  .screen-tabs-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 16px 10px;
+  }
+
+  .screen-tab-list,
+  .screen-tab-actions {
+    display: flex;
+    grid-template-columns: none;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .screen-tab-list::-webkit-scrollbar,
+  .screen-tab-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .screen-tab,
+  .screen-tab-actions > button,
+  .screen-tab-actions .api-pill {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 0 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .screen-tab svg,
+  .screen-tab-actions svg {
+    flex: 0 0 auto;
+  }
+
+  .home-task h2.just-say-title {
+    font-size: clamp(34px, 11vw, 46px);
+    line-height: 1;
+  }
+
+  .home-task,
+  .home-coach,
+  .home-growth,
+  .value-card,
+  .stage,
+  .report-grid > .panel {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .teacher-support-copy {
+    font-size: 16px;
+  }
+
+  .coach-prompt {
+    padding: 12px 14px;
+    font-size: 16px;
+    border-radius: 16px;
+  }
+
+  .coach-state-panel {
+    padding: 12px 14px;
+  }
+
+  .coach-state-panel span {
+    font-size: 17px;
+  }
+
+  .coach-avatar-wrap {
+    width: min(200px, 100%);
+    min-height: 200px;
+  }
+
+  .caption-line {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .caption-stream {
+    max-height: 320px;
+  }
+
+  .speech-input-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .speech-input-bar input {
+    order: -1;
+    flex: 1 1 100%;
+    min-height: 40px;
+    padding: 0 4px;
+  }
+
+  .mic-toggle-btn,
+  .send-answer-btn {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .asr-language-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .asr-language-options {
+    justify-content: space-between;
+  }
+
+  .asr-language-options button {
+    flex: 1 1 0;
+    min-height: 40px;
+  }
+
+  .quick-prompt-chip {
+    font-size: 0.78rem;
+  }
+
+  .settings-panel {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .settings-header h2 {
+    font-size: 1.4rem;
+  }
+
+  .mode-switch {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .preset-grid,
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .settings-action-buttons {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .top-actions,
+  .home-task .top-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .primary,
+  .secondary,
+  .ghost,
+  .danger {
+    min-height: 48px;
+  }
+}
+
+/* ---------- Mobile kecil (<= 520px) ---------- */
+@media (max-width: 520px) {
+  .app-shell {
+    padding: 18px 12px 56px;
+  }
+
+  .screen-tabs-inner {
+    padding: 8px 12px 10px;
+  }
+
+  .brand-mark {
+    font-size: 0.95rem;
+  }
+
+  .home-task h2.just-say-title {
+    font-size: clamp(30px, 12vw, 40px);
+  }
+
+  .home-bubble {
+    font-size: 0.92rem;
+  }
+
+  .coach-avatar-wrap {
+    width: min(170px, 100%);
+    min-height: 170px;
+  }
+
+  .settings-action-buttons {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .asr-language-options button {
+    padding: 0 8px;
+    font-size: 0.76rem;
+  }
+}
+
+/* ---------- Layar sangat kecil (<= 380px) ---------- */
+@media (max-width: 380px) {
+  .screen-tab,
+  .screen-tab-actions > button,
+  .screen-tab-actions .api-pill {
+    padding: 0 9px;
+    font-size: 11px;
+  }
+
+  .home-task h2.just-say-title {
+    font-size: 28px;
+  }
+}
+
+/* ---------- Perangkat sentuh: hilangkan efek hover yang mengganggu ---------- */
+@media (hover: none) {
+  .primary:hover,
+  .secondary:hover,
+  .ghost:hover,
+  .danger:hover,
+  .scenario-card:hover,
+  .task-card:hover,
+  .quick-prompt-chip:hover {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   Panggung pelatih — label status jadi baris tersendiri
+   ------------------------------------------------------------
+   Struktur DOM sebenarnya:
+
+     .coach-avatar-wrap
+       .coach-stage          <- grid, overflow hidden
+         .sela-3d            <- avatar 3D (inline width/height = `size`)
+         .coach-status       <- label status
+
+   Sebelumnya `.coach-status` diposisikan ABSOLUT di dasar panggung. Cara itu
+   selalu menimpa badan avatar karena tinggi label bergantung panjang teks
+   (label dua bahasa ini setinggi 68px, sedangkan ruang yang disisakan hanya
+   66px). Menambah padding hanya menunda masalah: begitu teks membungkus ke
+   baris ketiga di layar sempit, tumpang tindih muncul lagi.
+
+   Solusinya struktural: jadikan panggung grid dua baris — avatar di baris
+   pertama, label di baris kedua. Dengan begitu label TIDAK PERNAH menimpa
+   avatar, berapa pun panjang teksnya.
+   ============================================================ */
+
+.coach-stage {
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 10px;
+  padding: 18px;
+}
+
+/* Label status ikut arus grid, bukan lagi mengapung di atas avatar. */
+.coach-stage .coach-status {
+  position: static;
+  width: 100%;
+  max-width: 100%;
+  padding: 9px 12px;
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+/* Avatar selalu muat di dalam panggung, tidak pernah meluber ke samping.
+   `height: auto !important` perlu karena komponen menulis height inline. */
+.coach-avatar-wrap .sela-3d {
+  max-width: 100%;
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+}
+
+@media (max-width: 980px) {
+  .coach-stage {
+    padding: 16px;
+    gap: 9px;
+  }
+}
+
+@media (max-width: 768px) {
+  .coach-stage {
+    padding: 14px;
+    gap: 8px;
+  }
+
+  .coach-avatar-wrap {
+    width: min(230px, 100%);
+    min-height: 230px;
+  }
+
+  .coach-stage .coach-status {
+    padding: 8px 10px;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .coach-avatar-wrap {
+    width: min(200px, 100%);
+    min-height: 200px;
+  }
+
+  .coach-stage {
+    padding: 12px;
+  }
+}
