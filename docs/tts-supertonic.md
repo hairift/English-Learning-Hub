@@ -213,6 +213,31 @@ Subsequent runs start instantly.
 | First synthesis takes minutes | Model still downloading | Wait for `GET /health` → `ready: true` |
 | `AttributeError: 'NoneType' object has no attribute 'sample_rate'` | Model not loaded yet | The engine calls `muat()` before reading `sample_rate`; ensure you did not reorder this |
 
+### 10. Client-side reliability — why the voice no longer wobbles
+
+The sidecar being healthy is not enough: the *perceived* instability users
+reported ("sometimes it works, sometimes it doesn't") came from three
+client-side behaviours that have all been fixed.
+
+| Behaviour | Why it felt broken | Fix |
+| --- | --- | --- |
+| **Cold start.** The model loads on first use, so the very first sentence of a session could take ~5.5 s while the same sentence from cache takes ~0.12 s. | The opening line sometimes lagged, sometimes did not. | On load, `App.tsx` fires one background `synthesize()` for a short greeting. That warms the model **and** fills both the server and client caches. |
+| **Permanent fallback.** Once a request failed, the app stayed on the browser voice until the page was reloaded — even after the sidecar came back. | Recovering the sidecar appeared to have no effect. | When every attempt fails, `ambilAudioTts()` calls `/api/tts/voices` in the background (that endpoint re-probes the sidecar) and then refreshes `/api/health`. |
+| **Silent engine switching.** The UI showed only the provider name, so a drop to the browser voice looked like the app randomly changing voice. | Users could not tell which engine was speaking. | The navigation pill and practice chip now read `Supertonic F1 · Auto ID/EN` or `Suara browser (cadangan) · …`. |
+
+Two guards protect the real-audio path:
+
+* `audioTtsSah()` rejects `provider: "mock"`, `format: "mock"` and
+  `fallback: true` **before** an `<audio>` element is created, so a known-bad
+  payload never costs a failed `play()` round-trip.
+* `ambilAudioTts()` retries once after a 350 ms pause, which absorbs the
+  occasional first-request rejection while the model is still warming.
+
+Measured on the local sidecar (`supertonic 1.3.1`, CPU): Indonesian cold
+≈ 5.5 s, cached ≈ 0.12 s, English ≈ 4.5 s. The settings dialog's **voice preview**
+button was verified end-to-end against the live sidecar and returns
+`provider: "supertonic"`, `lang: "id"`, `voice: "F1"`, `fallback: false`.
+
 ---
 
 ## Bahasa Indonesia
@@ -420,3 +445,29 @@ berikutnya langsung siap.
 | Angka masih dibaca aneh | Teks melewati normalizer | Panggil `POST /api/tts/normalize` dan periksa hasilnya |
 | Sintesis pertama lama sekali | Model masih diunduh | Tunggu sampai `GET /health` → `ready: true` |
 | `AttributeError: 'NoneType' object has no attribute 'sample_rate'` | Model belum dimuat | Mesin memanggil `muat()` sebelum membaca `sample_rate`; pastikan urutannya tidak diubah |
+
+### 10. Keandalan di sisi klien — kenapa suaranya berhenti goyah
+
+Sidecar yang sehat saja tidak cukup: ketidakstabilan yang *dirasakan* pengguna
+("kadang bisa, kadang tidak") berasal dari tiga perilaku sisi klien yang
+semuanya sudah diperbaiki.
+
+| Perilaku | Kenapa terasa rusak | Perbaikan |
+| --- | --- | --- |
+| **Mulai dingin.** Model dimuat saat pertama dipakai, jadi kalimat pertama sebuah sesi bisa butuh ~5,5 detik sementara kalimat yang sama dari cache hanya ~0,12 detik. | Kalimat pembuka kadang lambat, kadang tidak. | Saat aplikasi dimuat, `App.tsx` menjalankan satu `synthesize()` latar untuk sapaan pendek. Itu memanaskan model **sekaligus** mengisi cache server dan klien. |
+| **Cadangan permanen.** Setelah satu permintaan gagal, aplikasi bertahan di suara browser sampai halaman dimuat ulang — walaupun sidecar sudah hidup lagi. | Menghidupkan sidecar kembali tampak tidak berpengaruh. | Bila semua percobaan gagal, `ambilAudioTts()` memanggil `/api/tts/voices` di latar (endpoint itu memeriksa ulang sidecar) lalu menyegarkan `/api/health`. |
+| **Pergantian mesin tanpa kabar.** UI hanya menampilkan nama provider, jadi turunnya kualitas ke suara browser terlihat seperti aplikasi berganti suara secara acak. | Pengguna tidak bisa tahu mesin mana yang bicara. | Chip navigasi dan chip ruang latihan kini berbunyi `Supertonic F1 · Auto ID/EN` atau `Suara browser (cadangan) · …`. |
+
+Dua penjaga melindungi jalur audio asli:
+
+* `audioTtsSah()` menolak `provider: "mock"`, `format: "mock"`, dan
+  `fallback: true` **sebelum** elemen `<audio>` dibuat, sehingga muatan yang sudah
+  diketahui buruk tidak pernah memakan satu siklus `play()` yang gagal.
+* `ambilAudioTts()` mencoba ulang sekali setelah jeda 350 ms, yang menyerap
+  penolakan permintaan pertama saat model masih menghangat.
+
+Diukur pada sidecar lokal (`supertonic 1.3.1`, CPU): Bahasa Indonesia dingin
+≈ 5,5 detik, dari cache ≈ 0,12 detik, Bahasa Inggris ≈ 4,5 detik. Tombol
+**pratinjau suara** di dialog pengaturan sudah diverifikasi menyeluruh terhadap
+sidecar yang hidup dan mengembalikan `provider: "supertonic"`, `lang: "id"`,
+`voice: "F1"`, `fallback: false`.

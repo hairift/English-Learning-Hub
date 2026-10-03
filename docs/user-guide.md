@@ -54,6 +54,10 @@ The practice room is the heart of the app. It contains:
 * a live status indicator (`idle`, `listening`, `thinking`, `asking`),
 * the current round and the target goal,
 * a **hint** panel in Indonesian to help you phrase your answer,
+* a **voice engine chip** telling you which voice is actually speaking —
+  `Supertonic F1 · Auto ID/EN` when the on-device voice is running, or
+  `Suara browser (cadangan) · …` when the app has fallen back to the browser's
+  built-in voice. Lip sync works either way,
 * a microphone button to answer.
 
 The avatar's mouth moves with the tutor's voice; when the tutor is silent, the
@@ -73,6 +77,19 @@ live. When you stop, the app:
 
 If your browser has no microphone permission, the app still works — you can use
 the text fallback.
+
+**Choosing the language you speak.** Just above the answer bar there is a small
+language picker — `Otomatis` / `Indonesia` / `Inggris`:
+
+| Setting | What it does |
+| --- | --- |
+| `Otomatis` (default) | Starts in the language you used last, and switches automatically once it recognises that you changed language. |
+| `Indonesia` | Locks recognition to Indonesian. |
+| `Inggris` | Locks recognition to English. |
+
+Changing this while the microphone is on restarts listening in the new language
+**without** sending a half-finished answer. Your choice is remembered the next
+time you open the app.
 
 ### 6. Transcript
 
@@ -207,6 +224,10 @@ Ruang latihan adalah jantung aplikasi. Isinya:
 * indikator status langsung (`idle`, `listening`, `thinking`, `asking`),
 * ronde saat ini dan tujuan yang ditargetkan,
 * panel **petunjuk** berbahasa Indonesia untuk membantu menyusun jawaban,
+* **chip mesin suara** yang memberi tahu suara mana yang benar-benar dipakai —
+  `Supertonic F1 · Auto ID/EN` bila suara on-device aktif, atau
+  `Suara browser (cadangan) · …` bila aplikasi memakai suara bawaan browser.
+  Lip sync tetap bekerja pada kedua kondisi,
 * tombol mikrofon untuk menjawab.
 
 Mulut avatar bergerak mengikuti suara tutor; saat tutor diam, avatar bernapas,
@@ -226,6 +247,19 @@ ditranskripsi langsung. Saat Anda berhenti, aplikasi:
 
 Bila browser tidak punya izin mikrofon, aplikasi tetap jalan — Anda bisa memakai
 cadangan teks.
+
+**Memilih bahasa yang Anda ucapkan.** Tepat di atas bilah jawaban ada pemilih
+bahasa kecil — `Otomatis` / `Indonesia` / `Inggris`:
+
+| Pilihan | Fungsinya |
+| --- | --- |
+| `Otomatis` (default) | Mulai dengan bahasa terakhir yang Anda pakai, lalu berganti sendiri begitu terdeteksi Anda berpindah bahasa. |
+| `Indonesia` | Mengunci pengenalan ke Bahasa Indonesia. |
+| `Inggris` | Mengunci pengenalan ke Bahasa Inggris. |
+
+Menggantinya saat mikrofon menyala akan memulai ulang pendengaran pada bahasa
+baru **tanpa** mengirim jawaban yang belum selesai. Pilihan Anda diingat saat
+aplikasi dibuka lagi.
 
 ### 6. Transkrip
 

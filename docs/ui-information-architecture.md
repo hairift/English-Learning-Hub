@@ -27,7 +27,8 @@ Auxiliary entry points:
 * **Settings** is reachable from the top navigation at any time.
 
 The top navigation has three icon entries — **Home**, **Practice**, **Report** —
-plus **Settings**. Icons come from `lucide-react`; no emojis are used.
+plus **Settings**. Icons come from `lucide-react`; no emojis are used. It also
+carries a **voice engine chip** that names the voice currently in use.
 
 ### 2. Screen responsibilities
 
@@ -76,13 +77,18 @@ Modules:
 Modules:
 
 * Left: **3D coach stage** showing the original tutor with idle / listening /
-  thinking / asking / reviewing states and real-time lip sync.
+  thinking / asking / reviewing states and real-time lip sync, plus a status
+  label that sits **below** the avatar rather than over it.
 * Main dialogue area: the current question or follow-up, the learner's live
   transcript, and the AI reply.
 * Right control panel: task goal, round progress, hints, practice focus, and score
   preview.
-* Bottom control area: voice input button, recognition status, text-input
-  fallback, and end-practice button.
+* Bottom control area: **speech-recognition language picker**
+  (`Otomatis` / `Indonesia` / `Inggris`), voice input button, recognition status,
+  text-input fallback, and end-practice button.
+* **Voice engine chip** stating which voice is actually speaking —
+  `Supertonic F1 · Auto ID/EN` or `Suara browser (cadangan) · …` — so the learner
+  is never left guessing why the voice sounds different.
 
 #### Session Report
 
@@ -152,7 +158,8 @@ Titik masuk tambahan:
 * **Pengaturan** bisa diakses dari navigasi atas kapan saja.
 
 Navigasi atas punya tiga entri ikon — **Beranda**, **Latihan**, **Laporan** —
-plus **Pengaturan**. Ikon berasal dari `lucide-react`; tidak ada emoji.
+plus **Pengaturan**. Ikon berasal dari `lucide-react`; tidak ada emoji. Di sana
+juga ada **chip mesin suara** yang menyebut suara yang sedang dipakai.
 
 ### 2. Tanggung jawab layar
 
@@ -205,13 +212,18 @@ Modul:
 Modul:
 
 * Kiri: **panggung pelatih 3D** menampilkan tutor orisinal dengan status idle /
-  listening / thinking / asking / reviewing dan lip sync real time.
+  listening / thinking / asking / reviewing dan lip sync real time, plus label
+  status yang berada **di bawah** avatar, bukan menutupinya.
 * Area dialog utama: pertanyaan atau tindak lanjut saat ini, transkrip langsung
   pelajar, dan balasan AI.
 * Panel kontrol kanan: tujuan tugas, progres ronde, petunjuk, fokus latihan, dan
   pratinjau skor.
-* Area kontrol bawah: tombol input suara, status pengenalan, cadangan input teks,
-  dan tombol akhiri latihan.
+* Area kontrol bawah: **pemilih bahasa pengenalan suara**
+  (`Otomatis` / `Indonesia` / `Inggris`), tombol input suara, status pengenalan,
+  cadangan input teks, dan tombol akhiri latihan.
+* **Chip mesin suara** yang menyatakan suara mana yang benar-benar dipakai —
+  `Supertonic F1 · Auto ID/EN` atau `Suara browser (cadangan) · …` — supaya
+  pelajar tidak menduga-duga kenapa suaranya terdengar berbeda.
 
 #### Laporan Sesi
 
