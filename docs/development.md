@@ -51,14 +51,16 @@ Vite proxies `/api` to `http://127.0.0.1:5174` in **both** `server` and
 
 ### 5. Testing
 
-The suite uses **Vitest** + **Supertest** (17 test files):
+The suite uses **Vitest** + **Supertest** (19 test files):
 
 ```bash
 npm test
 ```
 
 Coverage includes the API surface, session lifecycle, text normalisation,
-report generation, the 3D avatar wrapper, and the Pipecat client.
+report generation, the 3D avatar wrapper, the Pipecat client, the **mouth-motion
+viseme mapping** (`tests/lipsyncMulut.test.ts`), and the **ASR language
+preference** (`tests/bahasaAsr.test.ts`).
 
 Because `Sela3DScene` is lazy and WebGL-gated, the whole suite runs in **jsdom
 without a GPU**.

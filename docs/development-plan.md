@@ -63,7 +63,7 @@ Before any release:
 
 ```bash
 npm run typecheck   # must exit 0
-npm test            # 17 test files must pass
+npm test            # 19 test files must pass
 npm run build       # must produce dist/
 ```
 

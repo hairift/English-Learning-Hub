@@ -61,7 +61,7 @@ or fallback path, so the app always runs:
 * No LLM key → deterministic mock dialogue.
 * TTS sidecar down → `window.speechSynthesis` fallback.
 * No WebGL → static avatar photo.
-* No audio analysis → text-driven visemes.
+* No audio analysis → procedural mouth driver (`lipsync/gerakMulut.ts`).
 
 ### 4. Data flow — a practice turn
 
@@ -151,9 +151,11 @@ All routes are under `/api`. Payloads are validated with Zod.
 | `api.ts` | Typed API client |
 | `styles.css` | The entire design system (blue tokens) |
 | `components/` | `CoachAvatar`, `Sela3DAvatar`, `Sela3DScene`, `ReportDashboard`, `ApiSettingsPanel`, `BrandGuidelines`, `WeekDots` |
-| `lipsync/` | `audioAnalyser`, `lipsyncStore`, `useLipsync`, `visemeDariTeks` |
-| `domain/` | `learning`, `checkin`, `growthMock` — learning logic |
+| `lipsync/` | `audioAnalyser`, `lipsyncStore`, `useLipsync`, `gerakMulut` |
+| `domain/` | `learning`, `checkin`, `growth` — learning logic |
 | `copy/` | `coachCopy` — all user-facing strings |
+| `storage.ts` | `localStorage` persistence (scenarios, settings, ASR language) |
+| `suaraBrowser.ts` | Browser `speechSynthesis` wrapper — voice selection, mouth sync, watchdog |
 | `pipecatVoiceClient.ts` | Optional WebRTC voice client |
 | `practiceExperience.ts` | Practice status copy/state mapping |
 | `practiceTranscript.ts` | Transcript assembly |
@@ -269,7 +271,7 @@ cadangan, jadi aplikasi selalu bisa jalan:
 * Tanpa kunci LLM → dialog mock deterministik.
 * Sidecar TTS mati → cadangan `window.speechSynthesis`.
 * Tanpa WebGL → foto avatar statis.
-* Tanpa analisis audio → viseme dari teks.
+* Tanpa analisis audio → penggerak mulut prosedural (`lipsync/gerakMulut.ts`).
 
 ### 4. Alur data — satu giliran latihan
 
@@ -359,9 +361,11 @@ Semua rute berada di bawah `/api`. Payload divalidasi dengan Zod.
 | `api.ts` | Klien API bertipe |
 | `styles.css` | Seluruh sistem desain (token biru) |
 | `components/` | `CoachAvatar`, `Sela3DAvatar`, `Sela3DScene`, `ReportDashboard`, `ApiSettingsPanel`, `BrandGuidelines`, `WeekDots` |
-| `lipsync/` | `audioAnalyser`, `lipsyncStore`, `useLipsync`, `visemeDariTeks` |
-| `domain/` | `learning`, `checkin`, `growthMock` — logika pembelajaran |
+| `lipsync/` | `audioAnalyser`, `lipsyncStore`, `useLipsync`, `gerakMulut` |
+| `domain/` | `learning`, `checkin`, `growth` — logika pembelajaran |
 | `copy/` | `coachCopy` — semua teks untuk user |
+| `storage.ts` | Penyimpanan `localStorage` (skenario, pengaturan, bahasa ASR) |
+| `suaraBrowser.ts` | Pembungkus `speechSynthesis` browser — pemilihan suara, sinkron mulut, pengaman waktu |
 | `pipecatVoiceClient.ts` | Klien suara WebRTC opsional |
 | `practiceExperience.ts` | Pemetaan status & teks latihan |
 | `practiceTranscript.ts` | Penyusunan transkrip |

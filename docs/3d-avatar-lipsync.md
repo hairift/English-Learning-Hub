@@ -148,7 +148,8 @@ gesture occurs, and `resume()` is asynchronous. Because of that:
   background (throttled, so the 60 fps render loop cannot flood the browser).
 * `pastikanKonteksBerjalan()` is awaited before playback. If the context genuinely
   cannot run, the element is **not** routed through Web Audio — otherwise the speech
-  would be silent — and the text-driven viseme path is used instead.
+  would be silent — and the procedural mouth driver (`gerakMulut.ts`, see §6.2) is
+  used instead.
 
 Getting this wrong is exactly why "lip sync does not work" happens: the audio plays,
 but the analyser was never attached.
@@ -440,7 +441,7 @@ gesture pengguna, dan `resume()` bersifat asinkron. Karena itu:
   agar loop render 60 fps tidak membanjiri browser).
 * `pastikanKonteksBerjalan()` ditunggu sebelum pemutaran. Bila konteks benar-benar tidak
   bisa berjalan, elemen **tidak** dialirkan lewat Web Audio — kalau tidak, suara akan
-  senyap — dan jalur viseme dari teks yang dipakai.
+  senyap — dan penggerak mulut prosedural (`gerakMulut.ts`, lihat §6.2) yang dipakai.
 
 Kesalahan di titik inilah penyebab kasus "lip sync tidak berfungsi": suara terdengar,
 tetapi analiser tidak pernah tersambung.

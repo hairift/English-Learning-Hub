@@ -287,6 +287,7 @@ The suite covers the API surface, session lifecycle, report generation, provider
 | [`docs/provider-setup.md`](docs/provider-setup.md) | Configuring LLM / ASR / TTS providers |
 | [`docs/tts-supertonic.md`](docs/tts-supertonic.md) | TTS sidecar and number normalisation |
 | [`docs/3d-avatar-lipsync.md`](docs/3d-avatar-lipsync.md) | Avatar pipeline and lip sync |
+| [`docs/responsive-and-voice.md`](docs/responsive-and-voice.md) | Responsive breakpoints, always-on mouth motion, bilingual speech recognition, TTS reliability |
 | [`docs/visual-design-system.md`](docs/visual-design-system.md) | Blue design system and tokens |
 | [`docs/product-requirements.md`](docs/product-requirements.md) | Requirements and feature coverage |
 | [`docs/ui-information-architecture.md`](docs/ui-information-architecture.md) | Navigation structure and screen responsibilities |
@@ -551,7 +552,7 @@ Lihat [`docs/3d-avatar-lipsync.md`](docs/3d-avatar-lipsync.md).
 ## 8. Pengujian
 
 ```bash
-npm test          # 17 berkas tes / 73 tes
+npm test          # 19 berkas tes / 86 tes
 npm run typecheck # tsc --noEmit
 npm run build     # build produksi
 ```
@@ -568,6 +569,7 @@ Rangkaian tes mencakup permukaan API, siklus hidup sesi, pembuatan laporan, peng
 | [`docs/provider-setup.md`](docs/provider-setup.md) | Cara mengatur provider LLM / ASR / TTS |
 | [`docs/tts-supertonic.md`](docs/tts-supertonic.md) | Sidecar TTS dan normalisasi angka |
 | [`docs/3d-avatar-lipsync.md`](docs/3d-avatar-lipsync.md) | Pipeline avatar dan lip sync |
+| [`docs/responsive-and-voice.md`](docs/responsive-and-voice.md) | Titik henti responsif, gerak mulut yang selalu hidup, pengenalan suara bilingual, keandalan TTS |
 | [`docs/visual-design-system.md`](docs/visual-design-system.md) | Sistem desain biru dan token warna |
 | [`docs/product-requirements.md`](docs/product-requirements.md) | Kebutuhan dan cakupan fitur |
 | [`docs/ui-information-architecture.md`](docs/ui-information-architecture.md) | Struktur navigasi dan tanggung jawab layar |
