@@ -195,6 +195,18 @@ npm start        # listens on $PORT (default 5174) and binds 0.0.0.0
 The Supertonic sidecar is optional in this mode — if it is not running, the frontend
 falls back to the browser's built-in speech synthesis, so practice still works.
 
+> **Why the free hosted preview uses the browser voice.** A free single-port
+> sandbox cannot carry the Supertonic engine: the ONNX models alone are **385 MB**
+> (a 245 MB `vector_estimator.onnx`, a 97 MB `vocoder.onnx` and a 35 MB
+> `text_encoder.onnx`) on top of a ~174 MB Python virtualenv, and the sandbox
+> exposes one HTTP port with no Python runtime. Downloading and loading that on
+> every cold start would blow past the startup limit. So on the hosted link
+> `/api/health` reports `tts.status = "local-offline"`, the voice chip honestly
+> reads **`Suara browser (cadangan) · Auto ID/EN`**, and the browser's own voice
+> speaks instead. **Lip sync still works** — the procedural mouth driver runs for
+> every utterance and does not depend on being able to analyse the audio.
+> To hear the real Supertonic voice, run the app locally (`npm run dev:tts`).
+
 ## 5. Configuration
 
 All configuration lives in `.env` (git-ignored; `.env.example` documents every option). Settings can also be changed at runtime from the in-app **Settings** panel, which persists to `.sela-settings.json`.
@@ -481,6 +493,19 @@ npm start        # mendengarkan $PORT (default 5174) dan bind 0.0.0.0
 
 Sidecar Supertonic bersifat opsional pada mode ini — bila tidak berjalan, frontend
 memakai suara bawaan browser sehingga latihan tetap bisa dilakukan.
+
+> **Kenapa pratinjau hosting gratis memakai suara browser.** Sandbox satu port
+> gratis tidak bisa membawa mesin Supertonic: berkas model ONNX-nya saja **385 MB**
+> (`vector_estimator.onnx` 245 MB, `vocoder.onnx` 97 MB, dan `text_encoder.onnx`
+> 35 MB) di atas virtualenv Python ~174 MB, sedangkan sandbox hanya membuka satu
+> port HTTP dan tidak menyediakan runtime Python. Mengunduh lalu memuatnya di
+> setiap start dingin akan melewati batas waktu start. Karena itu pada tautan
+> hosting `/api/health` melaporkan `tts.status = "local-offline"`, chip mesin suara
+> dengan jujur berbunyi **`Suara browser (cadangan) · Auto ID/EN`**, dan suara
+> browser yang berbicara. **Lip sync tetap bekerja** — penggerak mulut prosedural
+> berjalan untuk setiap ucapan dan tidak bergantung pada kemampuan menganalisis
+> audio. Untuk mendengar suara Supertonic yang asli, jalankan aplikasi secara lokal
+> (`npm run dev:tts`).
 
 ## 5. Konfigurasi
 

@@ -238,6 +238,16 @@ Measured on the local sidecar (`supertonic 1.3.1`, CPU): Indonesian cold
 button was verified end-to-end against the live sidecar and returns
 `provider: "supertonic"`, `lang: "id"`, `voice: "F1"`, `fallback: false`.
 
+**The hosted preview cannot run Supertonic — by design, not by bug.** The engine
+needs a Python runtime, a ~174 MB virtualenv and **385 MB** of ONNX models
+(`vector_estimator.onnx` 245 MB, `vocoder.onnx` 97 MB, `text_encoder.onnx`
+35 MB), while the free sandbox exposes a single HTTP port and no Python. Paying
+that cost on every cold start would exceed the startup limit. Verified on the
+live link: `/api/health` → `tts.status: "local-offline"`, the voice chip reads
+`Suara browser (cadangan) · Auto ID/EN`, and the mouth still animates
+(`morphBergerak: true`, peak `0.916`) because `gerakMulut.ts` does not depend on
+the audio signal. Run locally for the real Supertonic voice.
+
 ---
 
 ## Bahasa Indonesia
@@ -471,3 +481,13 @@ Diukur pada sidecar lokal (`supertonic 1.3.1`, CPU): Bahasa Indonesia dingin
 **pratinjau suara** di dialog pengaturan sudah diverifikasi menyeluruh terhadap
 sidecar yang hidup dan mengembalikan `provider: "supertonic"`, `lang: "id"`,
 `voice: "F1"`, `fallback: false`.
+
+**Pratinjau hosting tidak bisa menjalankan Supertonic — memang begitu, bukan bug.**
+Mesin ini butuh runtime Python, virtualenv ~174 MB, dan **385 MB** model ONNX
+(`vector_estimator.onnx` 245 MB, `vocoder.onnx` 97 MB, `text_encoder.onnx`
+35 MB), sedangkan sandbox gratis hanya membuka satu port HTTP tanpa Python.
+Membayar biaya itu di setiap start dingin akan melewati batas waktu start.
+Terverifikasi pada tautan hosting: `/api/health` → `tts.status: "local-offline"`,
+chip mesin suara berbunyi `Suara browser (cadangan) · Auto ID/EN`, dan mulut tetap
+bergerak (`morphBergerak: true`, puncak `0.916`) karena `gerakMulut.ts` tidak
+bergantung pada sinyal audio. Jalankan secara lokal untuk suara Supertonic asli.
