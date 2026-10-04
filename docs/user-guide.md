@@ -16,10 +16,55 @@ app.
 
 The home screen introduces **Sela Tutor English** and shows your practice streak
 and weekly activity. The primary action starts a new practice session. The top
-navigation has three entries — **Home**, **Practice**, and **Report** — each with
-an icon rather than an emoji.
+navigation has four entries — **Home**, **Journey**, **Practice**, and **Report**
+— each with an icon rather than an emoji, plus a hearts widget and Settings.
 
-### 2. Choosing a scenario
+### 2. Learning path (Journey)
+
+![Learning path map](screenshots/jalur-peta.png)
+
+The **Journey** tab is your structured curriculum, ordered by CEFR level from A1
+to C1. It is laid out like a path map: eight units, each holding two level nodes.
+
+* A **green node with a badge** is finished and shows the score you earned.
+* A **highlighted node** is open — this is your next step.
+* A **greyed node with a padlock** is locked until you pass the level before it.
+
+The top bar keeps your **streak**, **total XP**, **hearts**, and **league** in
+sight at all times. The progress ring shows how much of the whole curriculum you
+have completed.
+
+To play a level, tap its node. You get the level's exercise set — four questions
+drawn from five exercise types: arrange the sentence, match the pairs, fill the
+blank, listen and type, or choose the translation.
+
+![Interactive quiz](screenshots/jalur-kuis.png)
+
+**Passing:** you must answer every question correctly to pass a level. A wrong
+answer costs one heart and the app never shows you the answer. If you run out of
+hearts, the quiz is blocked until they recover (one heart every 30 minutes).
+
+**Honest scoring:** XP is only awarded when you genuinely pass, and only once per
+level — replaying a finished level never inflates your score.
+
+Below the map you also get:
+
+* **Weekly league board** — your XP for the last seven days and how far you are
+  from promotion to the next league.
+* **Review panel (SRS)** — flashcards for vocabulary from levels you have finished.
+  Use **Load vocabulary** to add words, then review the cards that are due today;
+  a correct answer pushes the card further into the future.
+
+### 3. Placement test
+
+![Placement test result](screenshots/jalur-penempatan.png)
+
+Not sure where to start? Open the placement test from the Journey tab. It asks 15
+questions spanning A1 to C1 and reports the level that fits you, with a per-level
+breakdown. Your result seeds the review deck so you begin with vocabulary that
+matches your level.
+
+### 4. Choosing a scenario
 
 ![Scenario cards](screenshots/02-kartu-skenario.png)
 
@@ -33,7 +78,7 @@ Scenarios are real-world situations you might actually face:
 
 Each card states the situation and the speaking skill you will train.
 
-### 3. Picking a task
+### 5. Picking a task
 
 ![Task selection](screenshots/03-pilih-topik.png)
 
@@ -44,7 +89,7 @@ Inside a scenario you pick a specific task. Each task shows:
 * the **AI role** (interviewer, meeting chair, server),
 * the opening question you will hear first.
 
-### 4. Practice room
+### 6. Practice room
 
 ![Practice room](screenshots/04-ruang-latihan.png)
 
@@ -63,7 +108,7 @@ The practice room is the heart of the app. It contains:
 The avatar's mouth moves with the tutor's voice; when the tutor is silent, the
 avatar breathes, blinks, and idles naturally.
 
-### 5. Answering
+### 7. Answering
 
 ![Answering](screenshots/07-menjawab.png)
 
@@ -91,14 +136,14 @@ Changing this while the microphone is on restarts listening in the new language
 **without** sending a half-finished answer. Your choice is remembered the next
 time you open the app.
 
-### 6. Transcript
+### 8. Transcript
 
 ![Transcript](screenshots/08-transkrip.png)
 
 The transcript lists every turn — **Sela** (tutor) and **You** (learner) — in
 order, so you can re-read the whole conversation after the session.
 
-### 7. Evaluation report
+### 9. Evaluation report
 
 ![Evaluation report](screenshots/09-laporan.png)
 
@@ -116,7 +161,7 @@ When the session ends, the app generates a structured report:
 The report uses an **Answer → Action → Impact** structure so feedback is always
 tied to a concrete improvement.
 
-### 8. Settings — general
+### 10. Settings — general
 
 ![Settings overview](screenshots/05-pengaturan-umum.png)
 
@@ -134,7 +179,7 @@ everything manually:
 Settings are saved to `.sela-settings.json` on the server and take effect
 immediately — no restart needed.
 
-### 9. Settings — Supertonic TTS
+### 11. Settings — Supertonic TTS
 
 ![Supertonic settings](screenshots/06-pengaturan-tts-supertonic.png)
 
@@ -155,7 +200,7 @@ With **auto** language mode, Sela speaks Indonesian in a female Indonesian voice
 and switches to English automatically when the sentence is English — ideal for a
 mixed tutor/learner conversation.
 
-### 10. Tips for learners
+### 12. Tips for learners
 
 * Speak in complete sentences — the tutor scores task completion.
 * Use the Indonesian hint panel if you get stuck, then try again in English.
@@ -163,7 +208,7 @@ mixed tutor/learner conversation.
 * Aim for the **Answer → Action → Impact** structure in every answer.
 * Practise the same task twice and compare your scores.
 
-### 11. Troubleshooting
+### 13. Troubleshooting
 
 | Problem | Solution |
 | --- | --- |
@@ -186,10 +231,58 @@ aplikasi yang sedang berjalan.
 
 Halaman beranda memperkenalkan **Sela Tutor English** dan menampilkan runtutan
 latihan serta aktivitas mingguan Anda. Aksi utama memulai sesi latihan baru.
-Navigasi atas punya tiga entri — **Beranda**, **Latihan**, dan **Laporan** —
-masing-masing memakai ikon, bukan emoji.
+Navigasi atas punya empat entri — **Beranda**, **Jalur**, **Latihan**, dan
+**Laporan** — masing-masing memakai ikon, bukan emoji, plus widget nyawa dan
+Pengaturan.
 
-### 2. Memilih skenario
+### 2. Jalur belajar (Journey)
+
+![Peta jalur belajar](screenshots/jalur-peta.png)
+
+Tab **Jalur** adalah kurikulum terstruktur Anda, diurutkan berdasarkan tingkat
+CEFR dari A1 sampai C1. Tampilannya seperti peta jalur: delapan unit, masing-masing
+memuat dua simpul level.
+
+* **Simpul hijau dengan lencana** berarti sudah selesai dan menunjukkan nilai Anda.
+* **Simpul menyala** berarti terbuka — inilah langkah berikutnya.
+* **Simpul kelabu dengan gembok** terkunci sampai Anda lulus level sebelumnya.
+
+Bar atas selalu menampilkan **runtutan**, **total XP**, **nyawa**, dan **liga**
+Anda. Cincin progres menunjukkan seberapa banyak kurikulum yang sudah Anda
+selesaikan.
+
+Untuk memainkan level, ketuk simpulnya. Anda akan mendapat satu set latihan — empat
+soal dari lima tipe: susun kalimat, cocokkan pasangan, isi rumpang, dengar lalu
+ketik, atau pilih terjemahan.
+
+![Kuis interaktif](screenshots/jalur-kuis.png)
+
+**Kelulusan:** Anda harus menjawab semua soal dengan benar agar level lulus.
+Jawaban salah mengurangi satu nyawa dan aplikasi tidak pernah menunjukkan
+jawabannya. Jika nyawa habis, kuis diblokir sampai nyawa pulih (satu nyawa setiap
+30 menit).
+
+**Penilaian jujur:** XP hanya diberikan saat Anda benar-benar lulus, dan hanya
+sekali per level — memainkan ulang level yang sudah selesai tidak menambah nilai.
+
+Di bawah peta Anda juga mendapat:
+
+* **Papan liga mingguan** — XP Anda selama tujuh hari terakhir dan seberapa dekat
+  Anda dengan promosi ke liga berikutnya.
+* **Panel pengulangan (SRS)** — kartu flash untuk kosakata dari level yang sudah
+  Anda selesaikan. Tekan **Muat kosakata** untuk menambah kata, lalu ulangi kartu
+  yang jatuh tempo hari ini; jawaban benar mendorong kartu itu lebih jauh ke depan.
+
+### 3. Tes penempatan
+
+![Hasil tes penempatan](screenshots/jalur-penempatan.png)
+
+Bingung mulai dari mana? Buka tes penempatan dari tab Jalur. Tes ini menanyakan 15
+soal dari A1 sampai C1 dan melaporkan level yang cocok untuk Anda, lengkap dengan
+rincian per level. Hasilnya mengisi dek pengulangan agar Anda mulai dengan kosakata
+yang sesuai level Anda.
+
+### 4. Memilih skenario
 
 ![Kartu skenario](screenshots/02-kartu-skenario.png)
 
@@ -203,7 +296,7 @@ Skenario adalah situasi dunia nyata yang mungkin benar-benar Anda hadapi:
 
 Setiap kartu menyatakan situasinya dan keterampilan berbicara yang akan dilatih.
 
-### 3. Memilih tugas
+### 5. Memilih tugas
 
 ![Pilih topik](screenshots/03-pilih-topik.png)
 
@@ -214,7 +307,7 @@ Di dalam skenario Anda memilih tugas tertentu. Setiap tugas menampilkan:
 * **peran AI** (pewawancara, moderator rapat, pelayan),
 * pertanyaan pembuka yang akan Anda dengar lebih dulu.
 
-### 4. Ruang latihan
+### 6. Ruang latihan
 
 ![Ruang latihan](screenshots/04-ruang-latihan.png)
 
@@ -233,7 +326,7 @@ Ruang latihan adalah jantung aplikasi. Isinya:
 Mulut avatar bergerak mengikuti suara tutor; saat tutor diam, avatar bernapas,
 berkedip, dan diam secara alami.
 
-### 5. Menjawab
+### 7. Menjawab
 
 ![Menjawab](screenshots/07-menjawab.png)
 
@@ -261,7 +354,7 @@ Menggantinya saat mikrofon menyala akan memulai ulang pendengaran pada bahasa
 baru **tanpa** mengirim jawaban yang belum selesai. Pilihan Anda diingat saat
 aplikasi dibuka lagi.
 
-### 6. Transkrip
+### 8. Transkrip
 
 ![Transkrip](screenshots/08-transkrip.png)
 
@@ -269,7 +362,7 @@ Transkrip mencantumkan setiap giliran — **Sela** (tutor) dan **You** (pelajar)
 secara berurutan, sehingga Anda bisa membaca ulang seluruh percakapan setelah
 sesi.
 
-### 7. Laporan evaluasi
+### 9. Laporan evaluasi
 
 ![Laporan evaluasi](screenshots/09-laporan.png)
 
@@ -287,7 +380,7 @@ Saat sesi berakhir, aplikasi menghasilkan laporan terstruktur:
 Laporan memakai struktur **Answer → Action → Impact** sehingga umpan balik selalu
 terikat pada perbaikan yang konkret.
 
-### 8. Pengaturan — umum
+### 10. Pengaturan — umum
 
 ![Ringkasan pengaturan](screenshots/05-pengaturan-umum.png)
 
@@ -305,7 +398,7 @@ atau mengatur semuanya secara manual:
 Pengaturan disimpan ke `.sela-settings.json` di server dan berlaku seketika —
 tanpa perlu restart.
 
-### 9. Pengaturan — Supertonic TTS
+### 11. Pengaturan — Supertonic TTS
 
 ![Pengaturan Supertonic](screenshots/06-pengaturan-tts-supertonic.png)
 
@@ -326,7 +419,7 @@ Dengan mode bahasa **auto**, Sela berbicara Bahasa Indonesia dengan suara
 perempuan Indonesia dan otomatis beralih ke Bahasa Inggris saat kalimatnya
 berbahasa Inggris — ideal untuk percakapan campuran tutor/pelajar.
 
-### 10. Tips untuk pelajar
+### 12. Tips untuk pelajar
 
 * Bicaralah dengan kalimat lengkap — tutor menilai penyelesaian tugas.
 * Gunakan panel petunjuk Bahasa Indonesia bila tersendat, lalu coba lagi dalam
@@ -336,7 +429,7 @@ berbahasa Inggris — ideal untuk percakapan campuran tutor/pelajar.
 * Usahakan struktur **Answer → Action → Impact** di setiap jawaban.
 * Latih tugas yang sama dua kali lalu bandingkan skor Anda.
 
-### 11. Pemecahan masalah
+### 13. Pemecahan masalah
 
 | Masalah | Solusi |
 | --- | --- |

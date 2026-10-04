@@ -13,7 +13,6 @@ import {
   Play,
   Route,
   Send,
-  Settings,
   Sparkles,
   Square,
   Target,
@@ -24,25 +23,49 @@ import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CoachState, ConversationTurn, PracticeSession, ReportResult, SpeechAudioResult } from "../shared/schemas";
 import { deteksiBahasa, normalisasiTeksEn, normalisasiTeksId } from "../shared/textNormalizer";
+import {
+  hitungKeyakinanBahasa,
+  pecahKata
+} from "./domain/deteksiBahasa";
 import type { Scenario } from "../server/data";
 import { api, checkPipecatHealth, createPipecatOfferUrl, pipecatDiaktifkan, type HealthResult } from "./api";
 import { ApiSettingsPanel } from "./components/ApiSettingsPanel";
 import { BrandTopBar } from "./components/BrandGuidelines";
 import { CoachAvatar } from "./components/CoachAvatar";
+import { BarRentetan, KartuNyawa, PapanLiga } from "./components/Gamifikasi";
+import { MesinKuis } from "./components/MesinKuis";
+import { PetaJalur } from "./components/PetaJalur";
+import { PlacementTest, PanelSrs } from "./components/TesPenempatan";
 import { ReportDashboard } from "./components/ReportDashboard";
 import { WeekDots } from "./components/WeekDots";
 import { VALUE_CARDS } from "./copy/coachCopy";
 import { getShanghaiDate, type CheckinState } from "./domain/checkin";
+import { KURIKULUM, cariLevel, totalXpKurikulum, type Kosakata } from "./domain/jalurBelajar";
+import {
+  buatKartu,
+  kartuJatuhTempo,
+  type HasilPenempatan
+} from "./domain/srs";
+import { hitungStatusLevel, levelBerikutnya, ringkasJalur } from "./domain/progresJalur";
+import { nyawaTerkini } from "./domain/gamifikasi";
 import { ringkasanProgres } from "./domain/growth";
 import {
   completeToday,
   loadBahasaAsr,
   loadCheckin,
-  loadCustomScenarios,
+  loadGamifikasi,
+  loadJalur,
   loadLearning,
+  loadPenempatan,
+  loadSrs,
+  loadCustomScenarios,
   recordLearning,
   saveBahasaAsr,
   saveCustomScenario,
+  saveGamifikasi,
+  savePenempatan,
+  saveSrs,
+  selesaikanLevel,
   type BahasaAsr
 } from "./storage";
 import {
@@ -69,9 +92,9 @@ import {
   siapkanKonteksAudio
 } from "./lipsync/audioAnalyser";
 import { mulaiGerakMulut, type KendaliMulut } from "./lipsync/gerakMulut";
-import { browserPunyaSuara, ucapkanDenganBrowser, type KendaliUcapBrowser } from "./suaraBrowser";
+import { browserPunyaSuara, tungguDaftarSuara, ucapkanDenganBrowser, type KendaliUcapBrowser } from "./suaraBrowser";
 
-type Screen = "home" | "prep" | "practice" | "report";
+type Screen = "home" | "journey" | "prep" | "practice" | "report";
 type JourneyStatus = "done" | "active" | "waiting";
 type JourneyStep = {
   label: string;
@@ -120,6 +143,47 @@ const defaultCustomForm: CustomScenarioForm = {
  */
 const JEDA_KIRIM_OTOMATIS_MS = 1600;
 
+/**
+ * Apakah aplikasi berjalan dalam mode developer?
+ *
+ * Mode ini membuka panel konfigurasi API yang sengaja disembunyikan dari
+ * pengguna biasa. Aktifkan dengan menambahkan `?dev=1` pada URL, atau set
+ * `VITE_MODE_DEVELOPER=true` di `.env` untuk menjalankannya secara permanen
+ * di mesin pengembang.
+ *
+ * Ini BUKAN pengaman keamanan — hanya penyembunyian antarmuka. Rahasia API
+ * tetap hanya berada di server dan tidak pernah dikirim ke browser.
+ */
+function deteksiModeDeveloper(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (new URLSearchParams(window.location.search).get("dev") === "1") return true;
+  } catch {
+    // URL tidak bisa dibaca: abaikan.
+  }
+  return import.meta.env.VITE_MODE_DEVELOPER === "true";
+}
+
+/**
+ * Selisih skor minimum antara dua bahasa sebelum mode "Otomatis" berani
+ * mengganti bahasa recognizer.
+ *
+ * Dulu bahasa diganti begitu ada satu kata Inggris dalam kalimat Indonesia,
+ * sehingga pengenalan suara Indonesia langsung rusak dan pengguna harus
+ * memilih bahasa secara manual untuk memulihkannya. Dengan ambang ini,
+ * kalimat campuran seperti "saya suka belajar English" tetap dianggap
+ * Indonesia — yang memang bahasa mayoritas kalimatnya.
+ */
+const AMBANG_KEYAKINAN_BAHASA = 1.5;
+
+/**
+ * Jeda antar sesi recognizer (ms).
+ *
+ * Chrome butuh jeda sebelum `start()` boleh dipanggil lagi setelah `stop()`;
+ * memanggil terlalu cepat memicu `InvalidStateError` dan rekaman gagal lanjut.
+ */
+const JEDA_MULAI_ULANG_MIKROFON_MS = 260;
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [health, setHealth] = useState<HealthResult | null>(null);
@@ -140,6 +204,8 @@ export default function App() {
   const [busy, setBusy] = useState("");
   const [startError, setStartError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Mode developer dibaca sekali saat aplikasi dimuat. */
+  const modeDeveloper = useMemo(() => deteksiModeDeveloper(), []);
   const [userAnswerText, setUserAnswerText] = useState("");
   const [isListeningMic, setIsListeningMic] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -163,6 +229,34 @@ export default function App() {
   const [hariIni, setHariIni] = useState(() => getShanghaiDate());
   /** Bahasa pengenalan suara untuk mikrofon (Otomatis / Indonesia / Inggris). */
   const [bahasaAsr, setBahasaAsr] = useState<BahasaAsr>(() => loadBahasaAsr());
+
+  /* ------------------- Jalur belajar, gamifikasi, SRS ------------------- */
+
+  /** Kemajuan jalur belajar (level mana yang sudah lulus). */
+  const [jalur, setJalur] = useState(() => loadJalur());
+  /** Keadaan gamifikasi: XP, rentetan, liga, dan nyawa. */
+  const [gamifikasi, setGamifikasi] = useState(() => loadGamifikasi());
+  /** Kartu pengulangan berjadwal. */
+  const [srs, setSrs] = useState(() => loadSrs());
+  /** Hasil placement test yang tersimpan, bila pernah dikerjakan. */
+  const [penempatan, setPenempatan] = useState<HasilPenempatan | null>(() => loadPenempatan()?.hasil ?? null);
+  /** Level yang sedang dikerjakan di mesin kuis (null = tidak ada kuis aktif). */
+  const [levelKuis, setLevelKuis] = useState<string | null>(null);
+  /** Apakah layar tes penempatan sedang terbuka. */
+  const [tesPenempatanTerbuka, setTesPenempatanTerbuka] = useState(false);
+  /** Ringkasan hasil level yang baru saja diselesaikan, untuk ditampilkan sekali. */
+  const [hasilLevel, setHasilLevel] = useState<{ judul: string; benar: number; total: number; xp: number } | null>(
+    null
+  );
+
+  /** Status setiap level (selesai / terbuka / terkunci) — dihitung dari progres. */
+  const levelBerstatus = useMemo(() => hitungStatusLevel(jalur), [jalur]);
+  /** Ringkasan jalur untuk bilah kemajuan. */
+  const ringkasanJalur = useMemo(() => ringkasJalur(jalur), [jalur]);
+  /** Level yang sebaiknya dikerjakan berikutnya. */
+  const levelLanjut = useMemo(() => levelBerikutnya(jalur), [jalur]);
+  /** Nyawa terkini, sudah memperhitungkan pemulihan berbasis waktu. */
+  const nyawaSekarang = useMemo(() => nyawaTerkini(gamifikasi), [gamifikasi]);
 
   const todayDone = checkin.completedDates.includes(hariIni);
   const learningSummary = useMemo(() => summarizeLearning(learning), [learning]);
@@ -188,25 +282,25 @@ export default function App() {
   /** Ringkasan konfigurasi suara yang sedang aktif (untuk chip di navbar). */
   const voiceSummary = useMemo(() => {
     const tts = health?.providers.tts;
-    if (!tts) return null;
     const supertonic = health?.providers.supertonic;
-    const voice = supertonic?.voice || tts.voice || "";
-    const mode = tts.languageMode === "en" ? "English" : tts.languageMode === "id" ? "Indonesia" : "Auto ID/EN";
-    const supertonicSiap = Boolean(supertonic?.serviceReady);
-    // Mesin suara yang benar-benar dipakai: Supertonic bila sidecar siap,
-    // kalau tidak aplikasi otomatis memakai suara bawaan browser.
-    const pakaiSupertonic = tts.provider === "supertonic" && supertonicSiap;
-    const offline = tts.provider === "supertonic" && !supertonicSiap;
+    const voice = supertonic?.voice || tts?.voice || "";
+    const mode = tts?.languageMode === "en" ? "English" : tts?.languageMode === "id" ? "Indonesia" : "Auto ID/EN";
+
+    // Mesin utama sekarang suara bawaan browser, di semua kondisi. Ini yang
+    // membuat suara konsisten antara lokal dan hosting — lihat catatan panjang
+    // pada `ucapkanLewatBrowserSuara`.
+    const pakaiSupertonic = pakaiSupertonicTts() && Boolean(supertonic?.serviceReady);
+
     return {
-      provider: tts.provider,
+      provider: pakaiSupertonic ? "supertonic" : "browser",
       voice,
       mode,
-      offline,
-      supertonicSiap,
+      offline: false,
+      supertonicSiap: Boolean(supertonic?.serviceReady),
       mesin: pakaiSupertonic ? "Supertonic" : "Suara browser",
       keterangan: pakaiSupertonic
         ? `Supertonic ${voice || "F1"} · ${mode}`
-        : `Suara browser (cadangan) · ${mode}`
+        : `Suara perempuan · ${mode}`
     };
   }, [health]);
 
@@ -215,20 +309,12 @@ export default function App() {
       .health()
       .then((hasil) => {
         setHealth(hasil);
-        // Hangatkan mesin TTS di latar belakang. Sintesis pertama paling lambat
-        // (model baru dimuat), sehingga sapaan pembuka terasa "kadang lambat".
-        // Panggilan ini mengisi cache server sekaligus cache klien.
-        if (hasil.providers.supertonic?.serviceReady) {
-          const teksHangat = "Halo! Saya Sela, siap membantu latihan bahasa Inggrismu.";
-          void api
-            .synthesize(teksHangat)
-            .then((audio) => {
-              if (audioTtsSah(audio)) cacheTtsRef.current.set(teksHangat, audio as SpeechAudioResult);
-            })
-            .catch(() => null);
-        }
       })
       .catch(() => null);
+    // Hangatkan daftar suara browser. Chrome mengisi daftar suara secara
+    // asinkron, jadi tanpa pemanasan ini ucapan pertama bisa terbuang karena
+    // aplikasi masih mengira belum ada suara terpasang.
+    void tungguDaftarSuara();
     void api
       .scenarios()
       .then((result) => {
@@ -317,6 +403,106 @@ export default function App() {
   function enterPracticeRoom() {
     setStartError("");
     setScreen("practice");
+  }
+
+  /* ------------------- Aksi jalur belajar, kuis, dan SRS ------------------- */
+
+  /** Buka kuis untuk sebuah level. */
+  function mulaiLevel(idLevel: string) {
+    const ada = cariLevel(idLevel);
+    if (!ada) return;
+    setHasilLevel(null);
+    setLevelKuis(idLevel);
+    setScreen("journey");
+  }
+
+  /**
+   * Dipanggil mesin kuis saat seluruh soal selesai.
+   *
+   * Level dinyatakan LULUS hanya bila semua soal benar. Bila masih ada yang
+   * salah, XP tidak diberikan supaya angka di layar tidak menipu.
+   */
+  function selesaikanKuisLevel(hasil: { benar: number; total: number; nyawaTersisa: number }) {
+    if (!levelKuis) return;
+    const ada = cariLevel(levelKuis);
+    if (!ada) {
+      setLevelKuis(null);
+      return;
+    }
+
+    if (hasil.benar >= hasil.total) {
+      const { jalur: jalurBaru, gamifikasi: gamifikasiBaru } = selesaikanLevel({
+        idLevel: levelKuis,
+        benar: hasil.benar,
+        total: hasil.total,
+        xp: ada.level.xp
+      });
+      setJalur(jalurBaru);
+      setGamifikasi(gamifikasiBaru);
+      setHasilLevel({ judul: ada.level.judul, benar: hasil.benar, total: hasil.total, xp: ada.level.xp });
+    } else {
+      // Belum lulus: catat kehadiran sekaligus pulihkan satu nyawa.
+      const gamifikasiBaru = { ...loadGamifikasi() };
+      const baru = { ...gamifikasiBaru, nyawa: Math.min(5, nyawaTerkini(gamifikasiBaru) + 1) };
+      saveGamifikasi(baru);
+      setGamifikasi(baru);
+      setHasilLevel({ judul: ada.level.judul, benar: hasil.benar, total: hasil.total, xp: 0 });
+    }
+
+    setLevelKuis(null);
+    setScreen("journey");
+  }
+
+  /** Kurangi satu nyawa karena jawaban salah di kuis. */
+  function catatJawabanSalah() {
+    const baru = {
+      ...gamifikasi,
+      nyawa: Math.max(0, nyawaSekarang - 1),
+      nyawaBerkurangPada: new Date().toISOString()
+    };
+    saveGamifikasi(baru);
+    setGamifikasi(baru);
+  }
+
+  /**
+   * Masukkan kosakata dari seluruh level yang sudah lulus ke kotak SRS.
+   * Kartu yang sudah ada tidak diduplikasi — identitasnya nama kata Inggrisnya.
+   */
+  function muatKosakataSrs() {
+    const idSelesai = new Set(jalur.levelSelesai.map((item) => item.idLevel));
+    const sudahAda = new Set(srs.map((item) => item.id));
+    const tambahan: Kosakata[] = [];
+    for (const unit of KURIKULUM) {
+      for (const level of unit.level) {
+        if (!idSelesai.has(level.id)) continue;
+        for (const kata of unit.kosakata) {
+          if (sudahAda.has(kata.en)) continue;
+          sudahAda.add(kata.en);
+          tambahan.push(kata);
+        }
+      }
+    }
+    if (!tambahan.length) return;
+    const baru = [...srs, ...tambahan.map((kata) => buatKartu(kata))];
+    saveSrs(baru);
+    setSrs(baru);
+  }
+
+  /** Simpan hasil jawaban sebuah kartu SRS. */
+  function simpanKartuSrs(kartuBaru: (typeof srs)[number]) {
+    const baru = srs.some((item) => item.id === kartuBaru.id)
+      ? srs.map((item) => (item.id === kartuBaru.id ? kartuBaru : item))
+      : [...srs, kartuBaru];
+    saveSrs(baru);
+    setSrs(baru);
+  }
+
+  /** Setelah placement test selesai: simpan hasil dan lompat ke unit yang sesuai. */
+  function terapkanPenempatan(hasil: HasilPenempatan) {
+    savePenempatan(hasil);
+    setPenempatan(hasil);
+    setTesPenempatanTerbuka(false);
+    setScreen("journey");
   }
 
   function setTranscriptPinned(nextPinned: boolean) {
@@ -433,6 +619,20 @@ export default function App() {
    * Dipakai mode `auto` untuk menyesuaikan bahasa antar sesi rekaman.
    */
   const bahasaRecognitionRef = useRef<"id-ID" | "en-US">("id-ID");
+  /**
+   * Salinan `bahasaAsr` dalam ref.
+   *
+   * `onend` dari recognizer adalah callback yang dibuat sekali dan menahan
+   * closure lama, sehingga membaca `bahasaAsr` dari state akan selalu memberi
+   * nilai saat recognizer dibuat — bukan nilai terkini. Itu membuat pergantian
+   * bahasa manual tidak berpengaruh pada sesi berikutnya. Ref ini selalu
+   * berisi nilai terbaru.
+   */
+  const bahasaAsrRef = useRef<BahasaAsr>("auto");
+
+  // Jaga ref tetap sinkron dengan state. Menulis ke ref tidak memicu render,
+  // jadi aman dijalankan pada setiap render.
+  bahasaAsrRef.current = bahasaAsr;
 
   /** Hentikan penggerak gerakan mulut prosedural (bila sedang berjalan). */
   function hentikanGerakMulut() {
@@ -516,6 +716,27 @@ export default function App() {
   }
 
   /**
+   * Apakah TTS Supertonic (sidecar Python) dipakai?
+   *
+   * Bawaan: TIDAK. Suara bawaan browser dipakai untuk semua kondisi supaya
+   * konsisten antara lokal dan hosting.
+   *
+   * Developer bisa menyalakannya lewat salah satu cara:
+   * - set `VITE_PAKAI_SUPERTONIC=true` di `.env`, atau
+   * - tambahkan `?supertonic=1` pada URL saat menjalankan di lokal.
+   */
+  function pakaiSupertonicTts(): boolean {
+    if (typeof window === "undefined") return false;
+    try {
+      const dariUrl = new URLSearchParams(window.location.search).get("supertonic");
+      if (dariUrl === "1" || dariUrl === "true") return true;
+    } catch {
+      // URL tidak bisa dibaca: abaikan.
+    }
+    return import.meta.env.VITE_PAKAI_SUPERTONIC === "true";
+  }
+
+  /**
    * Ambil audio TTS sebuah teks dari cache klien, atau minta ke backend.
    *
    * Diberi percobaan ulang: layanan Supertonic lokal kadang menolak permintaan
@@ -558,12 +779,25 @@ export default function App() {
   }
 
   /**
-   * Ucapkan teks memakai suara bawaan browser (jalur cadangan).
+   * Ucapkan teks memakai suara bawaan browser — MESIN UTAMA aplikasi.
    *
-   * Gerakan mulut avatar dijalankan dari teks dan dimulai seketika — tidak lagi
-   * bergantung pada kejadian `onstart` yang tidak selalu muncul. Bila browser
-   * sama sekali tidak punya suara terpasang, alur tetap lanjut setelah
-   * perkiraan durasi sehingga percakapan tidak pernah menggantung.
+   * Kenapa ini jadi mesin utama, bukan lagi cadangan:
+   *
+   * Sidecar Supertonic butuh runtime Python, virtualenv ~174 MB, dan 385 MB
+   * model ONNX. Di hosting gratis yang hanya membuka satu port HTTP tanpa
+   * Python, mesin itu mustahil berjalan. Akibatnya di tautan hosting aplikasi
+   * SELALU memakai suara browser, sementara di lokal memakai Supertonic —
+   * dan perbedaan itulah yang membuat suara terasa "kadang bisa, kadang tidak".
+   *
+   * Dengan menjadikan `speechSynthesis` mesin utama di SEMUA kondisi, suara
+   * menjadi konsisten antara lokal dan hosting, tidak perlu unduhan besar, dan
+   * tidak ada lagi peralihan mesin yang membingungkan. Supertonic tetap bisa
+   * dipakai developer lewat panel tersembunyi.
+   *
+   * Gerakan mulut avatar dijalankan dari teks dan dimulai seketika — tidak
+   * bergantung pada kejadian `onstart`. Bila browser sama sekali tidak punya
+   * suara terpasang, alur tetap lanjut setelah perkiraan durasi sehingga
+   * percakapan tidak pernah menggantung.
    */
   function ucapkanLewatBrowserSuara(text: string) {
     const lang = deteksiBahasa(text);
@@ -575,6 +809,9 @@ export default function App() {
       teksUcap: teksSiap,
       lang,
       rate: 0.95,
+      // Sedikit lebih tinggi daripada 1 agar terdengar ramah, tapi tidak
+      // sampai terdengar seperti kartun.
+      pitch: 1.05,
       onMulai: () => {
         setPracticeStatus("speaking");
         setCoachState("asking");
@@ -618,6 +855,15 @@ export default function App() {
 
     setPracticeStatus("speaking");
     setCoachState("asking");
+
+    // Mesin utama: suara bawaan browser. Konsisten di lokal maupun hosting,
+    // tanpa unduhan model besar. Supertonic hanya dipakai bila developer
+    // menyalakannya lewat konfigurasi (lihat `pakaiSupertonicTts`).
+    if (!pakaiSupertonicTts()) {
+      hentikanSumberSuara();
+      ucapkanLewatBrowserSuara(teksBersih);
+      return;
+    }
 
     hentikanSumberSuara();
     // Pastikan mesin audio siap sebelum elemen audio dibuat.
@@ -777,7 +1023,9 @@ export default function App() {
 
       // `bahasaPaksa` dipakai saat pengguna baru saja mengganti bahasa: nilai
       // state React belum tentu sudah diperbarui pada closure ini.
-      const bahasaAwal = bahasaPaksa ?? (bahasaAsr === "auto" ? bahasaRecognitionRef.current : bahasaAsr);
+      // Ref dibaca (bukan state) supaya nilainya selalu yang terbaru.
+      const modeBahasa = bahasaAsrRef.current;
+      const bahasaAwal = bahasaPaksa ?? (modeBahasa === "auto" ? bahasaRecognitionRef.current : modeBahasa);
       const recognition = new SpeechRecognition();
       recognition.lang = bahasaAwal;
       recognition.continuous = true;
@@ -803,12 +1051,34 @@ export default function App() {
         if (finalBaru) {
           transkripFinalRef.current = `${transkripFinalRef.current} ${finalBaru}`.replace(/\s+/g, " ").trim();
           // Mode otomatis: sesuaikan bahasa untuk sesi rekaman berikutnya.
-          if (bahasaAsr === "auto") {
-            const terdeteksi = deteksiBahasa(transkripFinalRef.current);
-            const target = terdeteksi === "id" ? "id-ID" : "en-US";
-            if (target !== bahasaRecognitionRef.current) {
-              bahasaRecognitionRef.current = target;
-              debugSuara("bahasa-asr-menyesuaikan", { target, keyakinan });
+          //
+          // PENTING: penguncian bahasa hanya dilakukan bila buktinya KUAT.
+          // Versi sebelumnya mengunci begitu ada satu kata Inggris, sehingga
+          // kalimat Indonesia seperti "saya suka belajar English" membalik
+          // bahasa ke en-US dan merusak semua transkripsi berikutnya.
+          // Sekarang dibutuhkan selisih skor yang jelas (AMBANG_KEYAKINAN_BAHASA)
+          // dan minimal beberapa kata sebelum bahasa benar-benar diganti.
+          if (bahasaAsrRef.current === "auto") {
+            const hasil = hitungKeyakinanBahasa(transkripFinalRef.current);
+            const cukupKata = pecahKata(transkripFinalRef.current).length >= 3;
+            const percayaDiri = hasil.keyakinan >= AMBANG_KEYAKINAN_BAHASA;
+            if (cukupKata && percayaDiri) {
+              const target = hasil.bahasa === "id" ? "id-ID" : "en-US";
+              if (target !== bahasaRecognitionRef.current) {
+                bahasaRecognitionRef.current = target;
+                debugSuara("bahasa-asr-menyesuaikan", {
+                  target,
+                  keyakinan: hasil.keyakinan,
+                  skorId: hasil.skorId,
+                  skorEn: hasil.skorEn
+                });
+              }
+            } else {
+              debugSuara("bahasa-asr-ditahan", {
+                keyakinan: hasil.keyakinan,
+                cukupKata,
+                teks: transkripFinalRef.current.slice(0, 40)
+              });
             }
           }
         }
@@ -825,6 +1095,12 @@ export default function App() {
           hentikanMikrofon();
           return;
         }
+        // "network" dan galat sesaat lain sering pulih sendiri; jangan matikan
+        // mikrofon pengguna karena satu kegagalan sementara.
+        if (event?.error === "network") {
+          debugSuara("asr-galat-jaringan", { pesan: event?.message ?? "" });
+          return;
+        }
         hentikanMikrofon();
       };
 
@@ -832,14 +1108,23 @@ export default function App() {
         // Chrome mengakhiri sesi setelah jeda; mulai ulang selama pengguna
         // belum menekan tombol berhenti agar rekaman tetap utuh.
         if (micAktifRef.current) {
-          try {
-            const bahasaBerikut = bahasaAsr === "auto" ? bahasaRecognitionRef.current : bahasaAsr;
-            if (recognition.lang !== bahasaBerikut) recognition.lang = bahasaBerikut;
-            recognition.start();
-            return;
-          } catch {
-            // Gagal memulai ulang (mis. izin dicabut): tandai mikrofon berhenti.
-          }
+          // Sedikit jeda diperlukan: memanggil `start()` terlalu cepat setelah
+          // `stop()` memicu InvalidStateError dan rekaman gagal lanjut.
+          window.setTimeout(() => {
+            if (!micAktifRef.current) return;
+            try {
+              const bahasaBerikut = bahasaAsrRef.current === "auto"
+                ? bahasaRecognitionRef.current
+                : bahasaAsrRef.current;
+              if (recognition.lang !== bahasaBerikut) recognition.lang = bahasaBerikut;
+              recognition.start();
+            } catch {
+              // Gagal memulai ulang (mis. izin dicabut): tandai mikrofon berhenti.
+              micAktifRef.current = false;
+              setIsListeningMic(false);
+            }
+          }, JEDA_MULAI_ULANG_MIKROFON_MS);
+          return;
         }
         setIsListeningMic(false);
       };
@@ -1159,6 +1444,14 @@ export default function App() {
               Beranda / Home
             </button>
             <button
+              className={`screen-tab ${screen === "journey" ? "active" : ""}`}
+              type="button"
+              onClick={() => setScreen("journey")}
+            >
+              <Route size={16} aria-hidden="true" />
+              Jalur / Path
+            </button>
+            <button
               className={`screen-tab ${screen === "practice" || screen === "prep" ? "active" : ""}`}
               type="button"
               onClick={() => setScreen(practiceSession ? "practice" : "prep")}
@@ -1177,30 +1470,33 @@ export default function App() {
             </button>
           </div>
           <div className="screen-tab-actions">
+            <div className="nav-nyawa" title="Nyawa tersisa">
+              <KartuNyawa gamifikasi={gamifikasi} />
+            </div>
             {voiceSummary && (
               <div className="api-pill voice-pill" title={`Mesin suara: ${voiceSummary.mesin}`}>
                 <Volume2 size={16} />
                 {voiceSummary.keterangan}
-                {voiceSummary.offline && <span className="pill-warning" aria-hidden="true" />}
               </div>
             )}
             <div className="api-pill">
               <Headphones size={16} />
               {health?.mode === "live" ? "Live API" : "Mock Demo"}
             </div>
-            <button className="secondary" onClick={() => setSettingsOpen(true)}>
-              <Settings size={16} />
-              Pengaturan
-            </button>
           </div>
         </div>
       </nav>
       <main className="app-shell">
-        <ApiSettingsPanel
-          open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-          onSaved={(settings) => setHealth(settings)}
-        />
+        {/* Panel konfigurasi API sengaja TIDAK ditampilkan kepada pengguna.
+            Konfigurasi hanya bisa diubah developer lewat berkas `.env`.
+            Untuk membukanya saat pengembangan, tambahkan `?dev=1` pada URL. */}
+        {modeDeveloper && (
+          <ApiSettingsPanel
+            open={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            onSaved={(settings) => setHealth(settings)}
+          />
+        )}
 
         {screen === "home" && (
           <section className="home-screen">
@@ -1392,6 +1688,117 @@ export default function App() {
                 <div className="scene-meta">Tentukan peran AI, topik pembicaraan, dan pertanyaan pembuka sendiri</div>
               </button>
             </div>
+          </section>
+        )}
+
+        {screen === "journey" && (
+          <section className="journey-screen">
+            {levelKuis ? (
+              <MesinKuis
+                soal={cariLevel(levelKuis)?.level.soal ?? []}
+                judulLevel={cariLevel(levelKuis)?.level.judul ?? "Level"}
+                tingkat={cariLevel(levelKuis)?.unit.tingkat ?? "A1"}
+                nyawaAwal={nyawaSekarang}
+                onSelesai={selesaikanKuisLevel}
+                onBatal={() => {
+                  setLevelKuis(null);
+                  setScreen("journey");
+                }}
+                onSalah={catatJawabanSalah}
+                ucapkan={(teks) => void speakText(teks)}
+              />
+            ) : tesPenempatanTerbuka ? (
+              <PlacementTest
+                hasilTersimpan={penempatan}
+                onSelesai={terapkanPenempatan}
+                onBatal={() => setTesPenempatanTerbuka(false)}
+              />
+            ) : (
+              <>
+                <BarRentetan gamifikasi={gamifikasi} hariIni={hariIni} />
+
+                <div className="journey-hero">
+                  <div className="journey-hero-teks">
+                    <span className="eyebrow">Sela Learning Path</span>
+                    <h2>Belajar bertahap, dari sapaan sampai negosiasi.</h2>
+                    <p>
+                      Delapan unit, {levelBerstatus.length} level, {totalXpKurikulum()} XP tersedia. Setiap level
+                      mengunci level berikutnya, jadi kamu selalu maju dari dasar yang benar-benar dikuasai.
+                    </p>
+                    <div className="journey-hero-aksi">
+                      {levelLanjut && (
+                        <button className="primary" onClick={() => mulaiLevel(levelLanjut.level.id)}>
+                          <Play size={18} />
+                          {ringkasanJalur.selesai === 0 ? "Mulai dari awal" : "Lanjutkan belajar"}
+                        </button>
+                      )}
+                      <button className="secondary" onClick={() => setTesPenempatanTerbuka(true)}>
+                        <Target size={18} />
+                        {penempatan ? `Tes ulang (terakhir: ${penempatan.tingkat})` : "Tes penempatan"}
+                      </button>
+                    </div>
+                    {levelLanjut && (
+                      <p className="journey-hero-lanjut">
+                        Berikutnya: <strong>{levelLanjut.level.judul}</strong> — {levelLanjut.unit.judulId}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="journey-hero-stat">
+                    <div className="journey-cincin" style={{ ["--persen" as string]: `${ringkasanJalur.persen}%` }}>
+                      <span className="journey-cincin-nilai">{ringkasanJalur.persen}%</span>
+                      <span className="journey-cincin-label">jalur selesai</span>
+                    </div>
+                    <div className="journey-stat-baris">
+                      <span>Level selesai</span>
+                      <strong>
+                        {ringkasanJalur.selesai}/{ringkasanJalur.total}
+                      </strong>
+                    </div>
+                    <div className="journey-stat-baris">
+                      <span>XP jalur</span>
+                      <strong>{jalur.xpTotal}</strong>
+                    </div>
+                    <div className="journey-stat-baris">
+                      <span>Kartu pengulangan</span>
+                      <strong>{srs.length}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {hasilLevel && (
+                  <div className={`hasil-level ${hasilLevel.xp > 0 ? "lulus" : "belum"}`} role="status">
+                    <Award size={22} aria-hidden="true" />
+                    <div>
+                      <strong>
+                        {hasilLevel.xp > 0
+                          ? `Level "${hasilLevel.judul}" selesai — +${hasilLevel.xp} XP`
+                          : `Level "${hasilLevel.judul}" belum lulus`}
+                      </strong>
+                      <span>
+                        Jawaban benar {hasilLevel.benar}/{hasilLevel.total}.{" "}
+                        {hasilLevel.xp > 0
+                          ? "Level berikutnya sudah terbuka."
+                          : "Butuh semua jawaban benar untuk membuka level berikutnya — coba lagi, kamu pasti bisa."}
+                      </span>
+                    </div>
+                    <button className="secondary" onClick={() => setHasilLevel(null)}>
+                      Tutup
+                    </button>
+                  </div>
+                )}
+
+                <div className="journey-grid">
+                  <div className="journey-kolom-utama">
+                    <PetaJalur level={levelBerstatus} onMulaiLevel={mulaiLevel} />
+                  </div>
+                  <aside className="journey-kolom-sisi">
+                    <PapanLiga gamifikasi={gamifikasi} hariIni={hariIni} />
+                    <PanelSrs kartu={srs} onJawab={simpanKartuSrs} onMuatKosakata={muatKosakataSrs} />
+                  </aside>
+                </div>
+              </>
+            )}
           </section>
         )}
 

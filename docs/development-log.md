@@ -277,6 +277,67 @@
 * `capture-docs3.mjs` now also records the TTS provider of every synthesis
   request, and a failed screenshot no longer aborts the whole run.
 
+### 2026-10-04 — Fourth phase: Duolingo-class learning experience
+
+**Goal.** Turn the speaking tutor into a full English-learning product on the
+Duolingo / Airlearn model, without losing any existing feature.
+
+**Delivered**
+
+* **Clean-room analysis** — `docs/analisis-duolingo-airlearn.md` studies the
+  *visible* mechanics of Duolingo and Airlearn (feature map, exercise taxonomy,
+  gamification, SRS, speech-AI flow, data entities, curriculum schema) and states
+  explicitly what was **not** copied: no assets, copy, data, or private APIs.
+* **CEFR curriculum** — `src/domain/jalurBelajar.ts`: 8 units from A1 to C1, each
+  with 2 levels of 4 questions, drawn from five exercise types
+  (`susun-kalimat | cocokkan-kata | isi-rumpang | dengar-ketik | pilih-terjemahan`).
+  Question builders are deterministic — no `Math.random()`, so a level is the same
+  every time and the tests can assert on it.
+* **Path progression** — `src/domain/progresJalur.ts`: the first level is always
+  open, later levels unlock only after the previous one is passed, and XP is
+  recorded once per level so replays cannot inflate the total.
+* **Gamification** — `src/domain/gamifikasi.ts`: XP, daily streak with limited
+  freezes, monotonic leagues (Bronze → Silver → Gold → Sapphire → Diamond), and
+  5 hearts recovering one per 30 minutes.
+* **Spaced repetition** — `src/domain/srs.ts`: a 15-question placement bank across
+  A1–C1, plus flashcards on a `[0,1,2,4,8,16,32]`-day interval curve.
+* **UI** — new components `PetaJalur`, `MesinKuis`, `Gamifikasi`, `TesPenempatan`,
+  plus a new **Journey** tab and a hearts widget in the navigation. The Journey
+  screen is a real redesign (status strip, hero with progress ring, winding path
+  map, league board, review panel) rather than a restyle of the old layout.
+* **TTS** — Supertonic is now an optional developer-only sidecar; the app ships on
+  **Speech Synthesis** with a female Indonesian/English voice, so the default
+  install has no Python dependency and no first-request latency.
+* **Configuration** — the provider panel is hidden from learners entirely; only a
+  developer can change providers, via the API layer.
+* **STT** — `src/domain/deteksiBahasa.ts` replaces the ad-hoc language check with
+  weighted scoring (function words +1, structural markers +0.8, Indonesian affixes
+  +0.35) locked only when the gap is ≥ 1.5 across ≥ 3 words.
+
+**Bugs found and fixed by the new tests**
+
+* `nilaiSoal` for `cocokkan-kata` compared raw pairs, so `" Hello = Halo "` never
+  matched `"hello=halo"`. Fixed by sanitising each side of the pair separately.
+* `hitungRentetan` returns 1 (not 0) for a fresh day, so the streak-freeze branch
+  never fired. The condition now checks `jeda === 2 && rentetanSebelumnya > 0`.
+* `body { min-width: 320px }` forced 15 px of horizontal scroll at a 320 px
+  viewport with a classic scrollbar. Removed and replaced with `overflow-x: hidden`
+  on `html, body`.
+
+**Verification**
+
+* `npx tsc --noEmit` → exit 0.
+* `npx vitest run` → **25 files / 170 tests passed**.
+* `npm run build` → succeeded.
+* Browser run (Chromium via agent-browser): 16 level nodes across 8 units render;
+  a correct run awards +20 XP and unlocks level 2; a wrong run honestly reports
+  "belum lulus" with 0 XP; localStorage confirms persistence; the placement test
+  returns a level with a per-level breakdown; the SRS panel seeds 8 cards.
+* Responsive audit at 320/360/390/768/1280/1920 px: `scrollWidth == clientWidth`
+  at every width, and `window.scrollX` cannot be moved — no horizontal overflow.
+* New screenshots: `jalur-peta.png`, `jalur-peta-mobile.png`, `jalur-kuis.png`,
+  `jalur-penempatan.png`.
+
 ### Conventions adopted
 
 * New code comments are written in **Bahasa Indonesia**.
@@ -571,6 +632,72 @@
 * `capture-docs3.mjs` kini juga mencatat provider TTS setiap permintaan
   sintesis, dan kegagalan satu tangkapan layar tidak lagi menggagalkan seluruh
   proses.
+
+### 2026-10-04 — Fase keempat: pengalaman belajar kelas Duolingo
+
+**Tujuan.** Mengubah tutor bicara menjadi produk belajar bahasa Inggris utuh
+dengan model Duolingo / Airlearn, tanpa menghilangkan fitur yang sudah ada.
+
+**Yang dikerjakan**
+
+* **Analisis clean-room** — `docs/analisis-duolingo-airlearn.md` mempelajari
+  mekanisme *yang terlihat* dari Duolingo dan Airlearn (peta fitur, taksonomi
+  latihan, gamifikasi, SRS, alur speech-AI, entitas data, skema kurikulum) dan
+  menyatakan secara eksplisit apa yang **tidak** disalin: tidak ada aset, teks,
+  data, atau API privat.
+* **Kurikulum CEFR** — `src/domain/jalurBelajar.ts`: 8 unit dari A1 sampai C1,
+  masing-masing 2 level berisi 4 soal, diambil dari lima tipe latihan
+  (`susun-kalimat | cocokkan-kata | isi-rumpang | dengar-ketik | pilih-terjemahan`).
+  Penyusun soal bersifat deterministik — tanpa `Math.random()` — sehingga satu
+  level selalu sama dan tes bisa memeriksanya.
+* **Progres jalur** — `src/domain/progresJalur.ts`: level pertama selalu terbuka,
+  level berikutnya hanya terbuka setelah level sebelumnya lulus, dan XP dicatat
+  sekali per level agar pengulangan tidak menggelembungkan total.
+* **Gamifikasi** — `src/domain/gamifikasi.ts`: XP, runtutan harian dengan
+  pelindung terbatas, liga monoton (Bronze → Silver → Gold → Sapphire → Diamond),
+  dan 5 nyawa yang pulih satu per 30 menit.
+* **Pengulangan berjeda** — `src/domain/srs.ts`: bank penempatan 15 soal A1–C1,
+  plus kartu flash dengan kurva interval `[0,1,2,4,8,16,32]` hari.
+* **UI** — komponen baru `PetaJalur`, `MesinKuis`, `Gamifikasi`, `TesPenempatan`,
+  plus tab **Jalur** baru dan widget nyawa di navigasi. Layar Jalur benar-benar
+  dirombak (strip status, hero dengan cincin progres, peta jalur berkelok, papan
+  liga, panel pengulangan), bukan sekadar pengecatan ulang tata letak lama.
+* **TTS** — Supertonic kini sidecar opsional khusus developer; aplikasi berjalan
+  dengan **Speech Synthesis** bersuara perempuan Indonesia/Inggris, sehingga
+  pemasangan default tidak butuh Python dan tidak ada latensi permintaan pertama.
+* **Konfigurasi** — panel provider disembunyikan total dari pelajar; hanya
+  developer yang bisa mengubah provider, lewat lapisan API.
+* **STT** — `src/domain/deteksiBahasa.ts` menggantikan pemeriksaan bahasa ad-hoc
+  dengan skor berbobot (kata fungsi +1, penanda struktural +0.8, imbuhan Indonesia
+  +0.35) yang mengunci hanya bila selisihnya ≥ 1.5 pada ≥ 3 kata.
+
+**Bug yang ditemukan dan diperbaiki oleh tes baru**
+
+* `nilaiSoal` untuk `cocokkan-kata` membandingkan pasangan mentah, sehingga
+  `" Hello = Halo "` tidak pernah cocok dengan `"hello=halo"`. Diperbaiki dengan
+  membersihkan tiap sisi pasangan secara terpisah.
+* `hitungRentetan` mengembalikan 1 (bukan 0) untuk hari baru, sehingga cabang
+  pelindung runtutan tidak pernah aktif. Kondisinya kini memeriksa
+  `jeda === 2 && rentetanSebelumnya > 0`.
+* `body { min-width: 320px }` memaksa 15 px gulir horizontal pada viewport 320 px
+  dengan scrollbar klasik. Dihapus dan diganti `overflow-x: hidden` pada
+  `html, body`.
+
+**Verifikasi**
+
+* `npx tsc --noEmit` → keluar 0.
+* `npx vitest run` → **25 berkas / 170 tes lulus**.
+* `npm run build` → berhasil.
+* Uji browser (Chromium lewat agent-browser): 16 simpul level pada 8 unit tampil;
+  permainan benar memberi +20 XP dan membuka level 2; permainan salah melaporkan
+  "belum lulus" secara jujur dengan 0 XP; localStorage membuktikan persistensi;
+  tes penempatan mengembalikan level dengan rincian per level; panel SRS mengisi
+  8 kartu.
+* Audit responsif pada 320/360/390/768/1280/1920 px: `scrollWidth == clientWidth`
+  di semua lebar, dan `window.scrollX` tidak bisa digeser — tanpa luapan
+  horizontal.
+* Tangkapan layar baru: `jalur-peta.png`, `jalur-peta-mobile.png`, `jalur-kuis.png`,
+  `jalur-penempatan.png`.
 
 ### Konvensi yang diadopsi
 

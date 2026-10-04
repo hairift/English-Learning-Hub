@@ -63,7 +63,7 @@ Before any release:
 
 ```bash
 npm run typecheck   # must exit 0
-npm test            # 19 test files must pass
+npm test            # 25 test files must pass
 npm run build       # must produce dist/
 ```
 
@@ -131,7 +131,7 @@ Sebelum rilis apa pun:
 
 ```bash
 npm run typecheck   # harus keluar 0
-npm test            # 19 berkas uji harus lulus
+npm test            # 25 berkas uji harus lulus
 npm run build       # harus menghasilkan dist/
 ```
 

@@ -11,11 +11,29 @@ import {
   type LearningState
 } from "./domain/learning";
 import type { Scenario } from "../server/data";
+import {
+  buatGamifikasiKosong,
+  normalkanGamifikasi,
+  tambahXp,
+  type GamifikasiState
+} from "./domain/gamifikasi";
+import {
+  buatProgresKosong,
+  catatLevelSelesai,
+  normalkanProgres,
+  type ProgresJalur
+} from "./domain/progresJalur";
+import { normalkanSrs, type KartuSrs } from "./domain/srs";
+import type { HasilPenempatan } from "./domain/srs";
 
 const KEY = "ai-speaking-coach-checkin";
 const LEARNING_KEY = "ai-speaking-coach-learning";
 const CUSTOM_SCENARIOS_KEY = "ai-speaking-coach-custom-scenarios";
 const ASR_LANGUAGE_KEY = "sela-asr-language";
+const JALUR_KEY = "sela-jalur-belajar";
+const GAMIFIKASI_KEY = "sela-gamifikasi";
+const SRS_KEY = "sela-srs";
+const PENEMPATAN_KEY = "sela-placement";
 
 /**
  * Bahasa pengenalan suara (ASR) yang dipilih pengguna.
@@ -115,4 +133,109 @@ function isScenarioLike(value: unknown): value is Scenario {
       item.tasks[0]?.id &&
       item.tasks[0]?.openingQuestion
   );
+}
+
+/* ===================== JALUR BELAJAR (jalur + gamifikasi) ===================== */
+
+/** Baca kemajuan jalur belajar (level mana yang sudah lulus). */
+export function loadJalur(): ProgresJalur {
+  try {
+    const raw = localStorage.getItem(JALUR_KEY);
+    return raw ? normalkanProgres(JSON.parse(raw)) : buatProgresKosong();
+  } catch {
+    return buatProgresKosong();
+  }
+}
+
+export function saveJalur(state: ProgresJalur) {
+  try {
+    localStorage.setItem(JALUR_KEY, JSON.stringify(state));
+  } catch {
+    // Penyimpanan tidak tersedia (mode privat): abaikan dengan aman.
+  }
+}
+
+/** Catat penyelesaian sebuah level, lalu perbarui XP & rentetan sekaligus. */
+export function selesaikanLevel(masukan: {
+  idLevel: string;
+  benar: number;
+  total: number;
+  xp: number;
+}): { jalur: ProgresJalur; gamifikasi: GamifikasiState } {
+  const jalur = catatLevelSelesai(loadJalur(), masukan);
+  saveJalur(jalur);
+  const gamifikasi = tambahXp(loadGamifikasi(), masukan.xp);
+  saveGamifikasi(gamifikasi);
+  return { jalur, gamifikasi };
+}
+
+/** Baca keadaan gamifikasi (XP, rentetan, liga, nyawa). */
+export function loadGamifikasi(): GamifikasiState {
+  try {
+    const raw = localStorage.getItem(GAMIFIKASI_KEY);
+    return raw ? normalkanGamifikasi(JSON.parse(raw)) : buatGamifikasiKosong();
+  } catch {
+    return buatGamifikasiKosong();
+  }
+}
+
+export function saveGamifikasi(state: GamifikasiState) {
+  try {
+    localStorage.setItem(GAMIFIKASI_KEY, JSON.stringify(state));
+  } catch {
+    // Penyimpanan tidak tersedia (mode privat): abaikan dengan aman.
+  }
+}
+
+/** Tambahkan XP saja (mis. setelah sesi percakapan dengan tutor suara). */
+export function tambahXpSaja(jumlahXp: number): GamifikasiState {
+  const next = tambahXp(loadGamifikasi(), jumlahXp);
+  saveGamifikasi(next);
+  return next;
+}
+
+/* ============================ SRS & PLACEMENT ============================ */
+
+export function loadSrs(): KartuSrs[] {
+  try {
+    const raw = localStorage.getItem(SRS_KEY);
+    return raw ? normalkanSrs(JSON.parse(raw)) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSrs(kartu: KartuSrs[]) {
+  try {
+    localStorage.setItem(SRS_KEY, JSON.stringify(kartu));
+  } catch {
+    // Penyimpanan tidak tersedia (mode privat): abaikan dengan aman.
+  }
+}
+
+/** Hasil placement test yang sudah disimpan. */
+export interface PenempatanTersimpan {
+  hasil: HasilPenempatan;
+  dikerjakanPada: string;
+}
+
+export function loadPenempatan(): PenempatanTersimpan | null {
+  try {
+    const raw = localStorage.getItem(PENEMPATAN_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PenempatanTersimpan;
+    if (!parsed?.hasil?.tingkat) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function savePenempatan(hasil: HasilPenempatan) {
+  try {
+    const data: PenempatanTersimpan = { hasil, dikerjakanPada: new Date().toISOString() };
+    localStorage.setItem(PENEMPATAN_KEY, JSON.stringify(data));
+  } catch {
+    // Penyimpanan tidak tersedia (mode privat): abaikan dengan aman.
+  }
 }

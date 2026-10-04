@@ -438,156 +438,32 @@ export function normalisasiTeksEn(teks: string): string {
 /* Bagian 5 — Deteksi bahasa otomatis                                          */
 /* -------------------------------------------------------------------------- */
 
-/** Kata umum bahasa Indonesia untuk keperluan deteksi bahasa sederhana. */
-const KATA_UMUM_ID = [
-  "yang",
-  "dan",
-  "saya",
-  "kamu",
-  "anda",
-  "tidak",
-  "bisa",
-  "dengan",
-  "untuk",
-  "adalah",
-  "ini",
-  "itu",
-  "akan",
-  "sudah",
-  "belum",
-  "terima",
-  "kasih",
-  "tolong",
-  "silakan",
-  "bagaimana",
-  "apa",
-  "siapa",
-  "kenapa",
-  "mengapa",
-  "sekarang",
-  "nanti",
-  "besok",
-  "hari",
-  "sangat",
-  "sekali",
-  "juga",
-  "atau",
-  "karena",
-  "tetapi",
-  "tapi",
-  "kalau",
-  "jika",
-  "saja",
-  "sangat",
-  "mau",
-  "ingin",
-  "punya",
-  "buat",
-  "dari",
-  "ke",
-  "di",
-  "pada",
-  "ada",
-  "orang",
-  "waktu",
-  "baik",
-  "bagus",
-  "keren",
-  "latihan",
-  "belajar",
-  "bahasa"
-];
-
-/** Kata umum bahasa Inggris untuk keperluan deteksi bahasa sederhana. */
-const KATA_UMUM_EN = [
-  "the",
-  "and",
-  "you",
-  "your",
-  "i",
-  "we",
-  "they",
-  "is",
-  "are",
-  "was",
-  "were",
-  "be",
-  "have",
-  "has",
-  "do",
-  "does",
-  "did",
-  "can",
-  "could",
-  "would",
-  "should",
-  "will",
-  "to",
-  "of",
-  "in",
-  "on",
-  "at",
-  "for",
-  "with",
-  "about",
-  "this",
-  "that",
-  "these",
-  "those",
-  "hello",
-  "please",
-  "thank",
-  "thanks",
-  "what",
-  "why",
-  "how",
-  "when",
-  "where",
-  "who",
-  "because",
-  "but",
-  "so",
-  "very",
-  "good",
-  "great",
-  "project",
-  "team",
-  "work",
-  "practice",
-  "learn",
-  "english"
-];
+import {
+  hitungKeyakinanBahasa,
+  type HasilDeteksiBahasa
+} from "../src/domain/deteksiBahasa";
 
 /**
  * Menebak bahasa dominan pada sebuah teks.
+ *
+ * Implementasi aslinya berada di `src/domain/deteksiBahasa.ts` supaya logika
+ * yang dipakai browser dan server persis sama. Versi lama di berkas ini punya
+ * bug yang membuat pengenalan suara Bahasa Indonesia rusak — lihat komentar
+ * panjang di modul domain tersebut.
+ *
  * Dipakai untuk fitur "auto switch": kalau pengguna berbicara bahasa Inggris,
  * mesin TTS otomatis memakai `lang="en"`, dan sebaliknya.
  */
 export function deteksiBahasa(teks: string): "id" | "en" {
-  const kata = teks
-    .toLowerCase()
-    .replace(/[^a-z\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
+  return nilaiKeyakinanBahasa(teks).bahasa;
+}
 
-  if (!kata.length) return "id";
-
-  const himpunanId = new Set(KATA_UMUM_ID);
-  const himpunanEn = new Set(KATA_UMUM_EN);
-  let skorId = 0;
-  let skorEn = 0;
-
-  for (const item of kata) {
-    if (himpunanId.has(item)) skorId += 1;
-    if (himpunanEn.has(item)) skorEn += 1;
-  }
-
-  // Penanda khas Indonesia: awalan/akhiran umum.
-  if (/\b(me|ber|ter|pe|se)[a-z]{3,}\b/.test(teks.toLowerCase())) skorId += 0.5;
-  if (/\b[a-z]+(kan|nya|lah|kah)\b/.test(teks.toLowerCase())) skorId += 0.5;
-
-  // Default ke Indonesia (bahasa utama aplikasi) bila seri.
-  return skorEn > skorId ? "en" : "id";
+/**
+ * Versi lengkap: mengembalikan skor kedua bahasa beserta tingkat keyakinannya,
+ * sehingga pemanggil bisa menolak mengunci bahasa ketika buktinya lemah.
+ */
+export function nilaiKeyakinanBahasa(teks: string): HasilDeteksiBahasa {
+  return hitungKeyakinanBahasa(teks);
 }
 
 /** Mode bahasa TTS yang bisa dipilih pengguna di panel pengaturan. */

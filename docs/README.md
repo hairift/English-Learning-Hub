@@ -22,6 +22,7 @@ Every current document is bilingual: an **English** section followed by a
 | [`product-requirements.md`](product-requirements.md) | Positioning, users, scenarios, scoring, acceptance criteria |
 | [`ui-information-architecture.md`](ui-information-architecture.md) | Navigation structure, screen responsibilities, interaction states |
 | [`coach-checkin-interactions.md`](coach-checkin-interactions.md) | Coach persona, states, check-in rules, acceptance cases |
+| [`analisis-duolingo-airlearn.md`](analisis-duolingo-airlearn.md) | Clean-room analysis of Duolingo & Airlearn for English: feature map, exercise taxonomy, gamification, SRS, speech-AI flow, data entities, curriculum JSON schema, adopted design principles |
 | [`development.md`](development.md) | Install, scripts, ports, testing, build, conventions, troubleshooting |
 | [`development-plan.md`](development-plan.md) | Delivery plan, PR breakdown, verification gates |
 | [`development-log.md`](development-log.md) | Chronological development record |
@@ -48,6 +49,10 @@ app.
 | `12-mobile-beranda.png` | Home — mobile (390 px) |
 | `13-mobile-latihan.png` | Task selection — mobile (390 px) |
 | `13b-mobile-ruang-latihan.png` | Practice room — mobile (390 px) |
+| `jalur-peta.png` | Learning path map (Journey) |
+| `jalur-peta-mobile.png` | Learning path map — mobile (390 px) |
+| `jalur-kuis.png` | Interactive quiz |
+| `jalur-penempatan.png` | Placement test result |
 
 ### Archive
 
@@ -75,6 +80,7 @@ Setiap dokumen terkini bersifat bilingual: bagian **English** diikuti bagian
 | [`product-requirements.md`](product-requirements.md) | Posisi, pengguna, skenario, penilaian, kriteria penerimaan |
 | [`ui-information-architecture.md`](ui-information-architecture.md) | Struktur navigasi, tanggung jawab layar, status interaksi |
 | [`coach-checkin-interactions.md`](coach-checkin-interactions.md) | Persona pelatih, status, aturan check-in, kasus penerimaan |
+| [`analisis-duolingo-airlearn.md`](analisis-duolingo-airlearn.md) | Analisis clean-room Duolingo & Airlearn untuk bahasa Inggris: peta fitur, taksonomi latihan, gamifikasi, SRS, alur speech-AI, entitas data, skema JSON kurikulum, prinsip desain yang diadopsi |
 | [`development.md`](development.md) | Pemasangan, skrip, port, pengujian, build, konvensi, pemecahan masalah |
 | [`development-plan.md`](development-plan.md) | Rencana pengiriman, pemecahan PR, gerbang verifikasi |
 | [`development-log.md`](development-log.md) | Catatan pengembangan kronologis |
@@ -101,6 +107,10 @@ aplikasi yang berjalan.
 | `12-mobile-beranda.png` | Beranda — ponsel (390 px) |
 | `13-mobile-latihan.png` | Pilih topik — ponsel (390 px) |
 | `13b-mobile-ruang-latihan.png` | Ruang latihan — ponsel (390 px) |
+| `jalur-peta.png` | Peta jalur belajar (Jalur) |
+| `jalur-peta-mobile.png` | Peta jalur belajar — ponsel (390 px) |
+| `jalur-kuis.png` | Kuis interaktif |
+| `jalur-penempatan.png` | Hasil tes penempatan |
 
 ### Arsip
 

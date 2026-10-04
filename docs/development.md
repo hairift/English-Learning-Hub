@@ -51,7 +51,7 @@ Vite proxies `/api` to `http://127.0.0.1:5174` in **both** `server` and
 
 ### 5. Testing
 
-The suite uses **Vitest** + **Supertest** (19 test files):
+The suite uses **Vitest** + **Supertest** (25 test files):
 
 ```bash
 npm test
@@ -59,8 +59,13 @@ npm test
 
 Coverage includes the API surface, session lifecycle, text normalisation,
 report generation, the 3D avatar wrapper, the Pipecat client, the **mouth-motion
-viseme mapping** (`tests/lipsyncMulut.test.ts`), and the **ASR language
-preference** (`tests/bahasaAsr.test.ts`).
+viseme mapping** (`tests/lipsyncMulut.test.ts`), the **ASR language
+preference** (`tests/bahasaAsr.test.ts`), and the whole learning-path stack:
+curriculum integrity and level locking (`tests/jalurBelajar.test.ts`,
+`tests/jalurAlur.test.ts`), gamification rules (`tests/gamifikasi.test.ts`),
+the spaced-repetition scheduler (`tests/srs.test.ts`), weighted language
+detection (`tests/deteksiBahasa.test.ts`), and the quiz scoring engine
+(`tests/mesinKuis.test.ts`).
 
 Because `Sela3DScene` is lazy and WebGL-gated, the whole suite runs in **jsdom
 without a GPU**.
@@ -258,7 +263,7 @@ Vite mem-proxy `/api` ke `http://127.0.0.1:5174` di mode **`server` maupun
 
 ### 5. Pengujian
 
-Suite memakai **Vitest** + **Supertest** (19 berkas uji):
+Suite memakai **Vitest** + **Supertest** (25 berkas uji):
 
 ```bash
 npm test
@@ -266,8 +271,13 @@ npm test
 
 Cakupannya meliputi permukaan API, siklus hidup sesi, normalisasi teks,
 pembuatan laporan, pembungkus avatar 3D, klien Pipecat, **pemetaan viseme
-gerak mulut** (`tests/lipsyncMulut.test.ts`), dan **preferensi bahasa ASR**
-(`tests/bahasaAsr.test.ts`).
+gerak mulut** (`tests/lipsyncMulut.test.ts`), **preferensi bahasa ASR**
+(`tests/bahasaAsr.test.ts`), dan seluruh lapisan jalur belajar: keutuhan
+kurikulum serta kunci level (`tests/jalurBelajar.test.ts`,
+`tests/jalurAlur.test.ts`), aturan gamifikasi (`tests/gamifikasi.test.ts`),
+penjadwal pengulangan berjadwal (`tests/srs.test.ts`), deteksi bahasa berbobot
+(`tests/deteksiBahasa.test.ts`), dan mesin penilaian kuis
+(`tests/mesinKuis.test.ts`).
 
 Karena `Sela3DScene` lazy dan bergerbang WebGL, seluruh suite berjalan di
 **jsdom tanpa GPU**.

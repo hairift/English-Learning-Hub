@@ -77,6 +77,8 @@ There is no fixed quiz bank and no round counter. You just talk.
 
 ## 2. Feature list
 
+> **New in this revision:** a Duolingo-style learning path with level locking, an interactive five-type quiz engine, XP / streaks / weekly leagues, hearts, a placement test, and spaced repetition. The provider settings panel is now hidden from end users. See [`docs/analisis-duolingo-airlearn.md`](docs/analisis-duolingo-airlearn.md) for the clean-room feature analysis behind these additions.
+
 | Area | What it does |
 | --- | --- |
 | **Scenario practice** | Built-in interview / meeting / restaurant scenarios plus a fully custom scenario builder (scene name, AI role, task title, focus, opening question). |
@@ -90,7 +92,14 @@ There is no fixed quiz bank and no round counter. You just talk.
 | **Live transcript** | Every user and AI turn is captured, auto-scrolled, with an "N new messages" jump button when you scroll up. |
 | **Evaluation report** | LLM-generated 7-dimension score (fluency, pronunciation, grammar, vocabulary, coherence, task completion, interaction), sentence-level before/after fixes, expression upgrades, pronunciation tips and a next-practice plan. |
 | **Progress tracking** | Daily check-in, streak, growth trail, per-session history stored in `localStorage` — all derived from real practice data, never placeholder numbers. |
-| **Provider settings** | Configure LLM, ASR, TTS and pronunciation providers from the UI — including bring-your-own API keys, presets, and a live voice preview. |
+| **Learning path (skill tree)** | An 8-unit CEFR journey from A1 to C1, rendered as a winding path of level nodes. Each level unlocks only after the previous one is passed, so learners never skip ahead. Units show their grammar points, key vocabulary with examples, and speaking scenarios. |
+| **Interactive quiz engine** | Five exercise types: pick-the-translation, sentence builder, fill-in-the-blank, word matching and listen-and-type. A wrong answer never reveals the key — the learner retries, losing one heart. All scoring is a pure, unit-tested function. |
+| **XP, streaks & leagues** | XP per completed level (repeating a level does **not** double XP), daily streaks with limited streak freezes, and a monotonic weekly league ladder: Bronze → Silver → Gold → Sapphire → Diamond. |
+| **Hearts** | Five hearts; a wrong quiz answer costs one. Hearts recover one per 30 minutes and training also restores one. Running out ends the level and asks the learner to retry. |
+| **Placement test** | A tiered A1–C1 question set that estimates the learner's level, so proficient users don't restart from "hello". |
+| **Spaced repetition** | Every vocabulary item becomes a flashcard with mastery level 0–5 and a forgetting-curve interval of `[0, 1, 2, 4, 8, 16, 32]` days. Correct answers promote the card; wrong answers resurface it tomorrow. |
+| **Bilingual voice engine** | Speech Synthesis (browser) is the primary engine in every condition, with a female voice selectable for Indonesian and English. Supertonic remains available as a developer-side option via `.env`. |
+| **Developer-only configuration** | The provider settings panel is hidden from end users. Open it with `?dev=1`, or set `VITE_MODE_DEVELOPER=true`. Secrets stay server-side regardless. |
 | **Responsive layout** | Purpose-built breakpoints for desktop, laptop, tablet landscape, tablet portrait, phone and small phone. Navigation stays on one scrollable row and nothing overflows horizontally. |
 | **Mock mode** | The whole app works with zero API keys for demos and offline testing. |
 
@@ -282,18 +291,19 @@ See [`docs/3d-avatar-lipsync.md`](docs/3d-avatar-lipsync.md).
 ## 8. Testing
 
 ```bash
-npm test          # 19 test files / 86 tests
+npm test          # 25 test files / 170 tests
 npm run typecheck # tsc --noEmit
 npm run build     # production build
 ```
 
-The suite covers the API surface, session lifecycle, report generation, provider settings, the text normaliser, the growth/progress derivation, and the avatar fallback behaviour.
+The suite covers the API surface, session lifecycle, report generation, provider settings, the text normaliser, the growth/progress derivation, the avatar fallback behaviour, plus the new learning-path stack: curriculum integrity, level locking, XP/streak/league rules, the spaced-repetition scheduler, language detection, and the quiz scoring engine.
 
 ## 9. Documentation index
 
 | Document | Contents |
 | --- | --- |
 | [`docs/README.md`](docs/README.md) | Documentation index |
+| [`docs/analisis-duolingo-airlearn.md`](docs/analisis-duolingo-airlearn.md) | Clean-room analysis of Duolingo & Airlearn: full feature map, CEFR curriculum, exercise taxonomy, gamification mechanics, speech-AI flow, DB entities, tech-stack recommendations and JSON schema |
 | [`docs/architecture.md`](docs/architecture.md) | System design, data flow, module map |
 | [`docs/user-guide.md`](docs/user-guide.md) | Step-by-step usage guide |
 | [`docs/provider-setup.md`](docs/provider-setup.md) | Configuring LLM / ASR / TTS providers |
@@ -376,6 +386,8 @@ Tidak ada bank soal dan tidak ada hitungan ronde. Anda cukup berbicara.
 
 ## 2. Daftar fitur
 
+> **Baru di revisi ini:** jalur belajar bergaya Duolingo dengan kunci level, mesin kuis interaktif lima tipe soal, XP / streak / liga mingguan, nyawa, tes penempatan, dan pengulangan berjadwal. Panel pengaturan provider kini disembunyikan dari pengguna akhir. Lihat [`docs/analisis-duolingo-airlearn.md`](docs/analisis-duolingo-airlearn.md) untuk analisis rekayasa bersih di balik tambahan ini.
+
 | Bagian | Fungsi |
 | --- | --- |
 | **Latihan skenario** | Skenario bawaan wawancara / rapat / restoran, plus pembuat skenario kustom (nama scene, peran AI, judul tugas, fokus, pertanyaan pembuka). |
@@ -389,7 +401,14 @@ Tidak ada bank soal dan tidak ada hitungan ronde. Anda cukup berbicara.
 | **Transkrip langsung** | Setiap giliran pengguna dan AI dicatat, otomatis digulir, plus tombol lompat "N pesan baru" saat Anda menggulir ke atas. |
 | **Laporan evaluasi** | Skor 7 dimensi dari LLM (kelancaran, pengucapan, tata bahasa, kosakata, koherensi, penyelesaian tugas, interaksi), koreksi kalimat sebelum/sesudah, peningkatan ekspresi, tips pengucapan, dan rencana latihan berikutnya. |
 | **Pelacakan progres** | Check-in harian, streak, jejak pertumbuhan, dan riwayat tiap sesi yang disimpan di `localStorage` — semuanya diturunkan dari data latihan nyata, bukan angka contoh. |
-| **Pengaturan provider** | Atur provider LLM, ASR, TTS, dan penilaian pengucapan dari UI — termasuk memakai kunci API sendiri, preset siap pakai, dan pratinjau suara langsung. |
+| **Jalur belajar (skill tree)** | Perjalanan 8 unit CEFR dari A1 sampai C1, digambar sebagai jalur berkelok berisi node level. Sebuah level terbuka hanya setelah level sebelumnya lulus, jadi pelajar tidak melompat ke materi yang belum siap. Tiap unit menampilkan poin tata bahasa, kosakata kunci beserta contoh, dan skenario bicara. |
+| **Mesin kuis interaktif** | Lima tipe soal: pilih terjemahan, susun kalimat, isi rumpang, cocokkan kata, dan dengar-lalu-ketik. Jawaban salah **tidak** membuka kunci jawaban — pelajar mencoba lagi dan kehilangan satu nyawa. Seluruh penilaian adalah fungsi murni yang diuji terpisah. |
+| **XP, streak & liga** | XP untuk setiap level yang lulus (mengulang level **tidak** menggandakan XP), rentetan harian dengan pelindung terbatas, dan tangga liga mingguan yang hanya naik: Bronze → Silver → Gold → Sapphire → Diamond. |
+| **Nyawa** | Lima nyawa; satu jawaban kuis salah mengurangi satu. Nyawa pulih satu per 30 menit dan berlatih juga memulihkan satu. Nyawa habis menghentikan level dan pelajar diminta mengulang. |
+| **Tes penempatan** | Rangkaian soal bertingkat A1–C1 untuk menebak tingkat pelajar, supaya yang sudah mahir tidak perlu mulai dari "hello". |
+| **Pengulangan berjadwal** | Setiap kosakata menjadi kartu dengan tingkat penguasaan 0–5 dan interval kurva lupa `[0, 1, 2, 4, 8, 16, 32]` hari. Jawaban benar menaikkan kartu; jawaban salah memunculkannya lagi besok. |
+| **Mesin suara bilingual** | Speech Synthesis (browser) adalah mesin utama di semua kondisi, dengan suara perempuan yang bisa dipilih untuk Bahasa Indonesia dan Inggris. Supertonic tetap tersedia sebagai opsi sisi developer lewat `.env`. |
+| **Konfigurasi khusus developer** | Panel pengaturan provider disembunyikan dari pengguna akhir. Buka dengan `?dev=1`, atau set `VITE_MODE_DEVELOPER=true`. Rahasia tetap hanya berada di server. |
 | **Tata letak responsif** | Titik henti khusus untuk desktop, laptop, tablet lanskap, tablet potret, ponsel, dan ponsel kecil. Navigasi tetap satu baris yang bisa digeser dan tidak ada luapan mendatar. |
 | **Mode mock** | Seluruh aplikasi bisa berjalan tanpa kunci API sama sekali untuk demo dan pengujian offline. |
 
@@ -577,18 +596,19 @@ Lihat [`docs/3d-avatar-lipsync.md`](docs/3d-avatar-lipsync.md).
 ## 8. Pengujian
 
 ```bash
-npm test          # 19 berkas tes / 86 tes
+npm test          # 25 berkas tes / 170 tes
 npm run typecheck # tsc --noEmit
 npm run build     # build produksi
 ```
 
-Rangkaian tes mencakup permukaan API, siklus hidup sesi, pembuatan laporan, pengaturan provider, normaliser teks, perhitungan progres belajar, dan perilaku cadangan avatar.
+Rangkaian tes mencakup permukaan API, siklus hidup sesi, pembuatan laporan, pengaturan provider, normaliser teks, perhitungan progres belajar, dan perilaku cadangan avatar — ditambah seluruh lapisan jalur belajar yang baru: keutuhan kurikulum, kunci level, aturan XP/streak/liga, penjadwal pengulangan berjadwal, deteksi bahasa, dan mesin penilaian kuis.
 
 ## 9. Indeks dokumentasi
 
 | Dokumen | Isi |
 | --- | --- |
 | [`docs/README.md`](docs/README.md) | Indeks dokumentasi |
+| [`docs/analisis-duolingo-airlearn.md`](docs/analisis-duolingo-airlearn.md) | Analisis rekayasa bersih Duolingo & Airlearn: peta fitur lengkap, kurikulum CEFR, taksonomi latihan, mekanika gamifikasi, alur suara AI, entitas basis data, rekomendasi tumpukan teknologi, dan skema JSON |
 | [`docs/architecture.md`](docs/architecture.md) | Rancangan sistem, alur data, peta modul |
 | [`docs/user-guide.md`](docs/user-guide.md) | Panduan penggunaan langkah demi langkah |
 | [`docs/provider-setup.md`](docs/provider-setup.md) | Cara mengatur provider LLM / ASR / TTS |

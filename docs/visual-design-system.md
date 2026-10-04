@@ -77,11 +77,25 @@ This means the whole theme has a **single change point**.
 | `--snow` | `#ffffff` | Card background |
 | `--panel-bg` | `#f7f7f7` | Panel background |
 
+Gamification accents (used only on the Journey screen):
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `WARNA_LIGA.Bronze` | `#c98a4b` | Bronze league chip and bars |
+| `WARNA_LIGA.Silver` | `#9aa7b4` | Silver league chip and bars |
+| `WARNA_LIGA.Gold` | `#f2b705` | Gold league chip and bars |
+| `WARNA_LIGA.Sapphire` | `#2f6fdd` | Sapphire league chip and bars |
+| `WARNA_LIGA.Diamond` | `#41c9d6` | Diamond league chip and bars |
+
 Rules:
 
 * Page backgrounds use a light blue-white gradient; no saturated blocks.
 * Only the primary action uses `--biru-utama`; avoid competing accents.
 * Score charts may use blue/green/amber/red, but semantics must stay consistent.
+* League colours are reserved for league UI; never reuse them for generic
+  emphasis, so a learner can read league standing at a glance.
+* Hearts use a single warm accent; depleted hearts drop to a muted grey rather
+  than a second red, keeping the primary blue dominant.
 * Text must always meet contrast against its surface — dark text on light
   surfaces, light text on dark surfaces (this applies to the 3D scene gradients
   and to hard-coded SVG/canvas colours).
@@ -105,6 +119,21 @@ Layer structure: background → page container → cards → controls → feedba
 * Simple top navigation with the brand identity (logo + name + tagline).
 * A large hero card for "today's recommended practice".
 * Coach welcome card, recent scores, streak, weekly check-in, recommended scenarios.
+
+#### Learning path (Journey)
+
+* A **status strip** of pill chips (streak, XP, hearts, league, freezes) above the
+  hero, each with a line icon and a unit label.
+* A **hero card** pairing a headline with a conic-gradient **progress ring**; the
+  ring uses the brand blue and reports levels done out of the curriculum.
+* A **winding path map**: units are accordions; level nodes alternate left and
+  right along a vertical spine. Node states are visually distinct — filled blue
+  with a score badge when done, blue ring when open, grey with a padlock when
+  locked. No emoji; lock and check marks come from `lucide-react`.
+* A **two-column grid** below the map: the path on the main column, the weekly
+  league board and SRS review panel on the side column.
+* Beats are restrained: nodes nudge slightly on hover, celebrations stay small.
+  All animation respects `prefers-reduced-motion`.
 
 #### Scenario library
 
@@ -330,12 +359,26 @@ Artinya seluruh tema punya **satu titik perubahan**.
 | `--snow` | `#ffffff` | Latar kartu |
 | `--panel-bg` | `#f7f7f7` | Latar panel |
 
+Aksen gamifikasi (hanya dipakai di layar Jalur):
+
+| Token | Nilai | Penggunaan |
+| --- | --- | --- |
+| `WARNA_LIGA.Bronze` | `#c98a4b` | Chip dan batang liga Bronze |
+| `WARNA_LIGA.Silver` | `#9aa7b4` | Chip dan batang liga Silver |
+| `WARNA_LIGA.Gold` | `#f2b705` | Chip dan batang liga Gold |
+| `WARNA_LIGA.Sapphire` | `#2f6fdd` | Chip dan batang liga Sapphire |
+| `WARNA_LIGA.Diamond` | `#41c9d6` | Chip dan batang liga Diamond |
+
 Aturan:
 
 * Latar halaman memakai gradasi biru-putih terang; tanpa blok jenuh.
 * Hanya aksi utama memakai `--biru-utama`; hindari aksen yang bersaing.
 * Grafik skor boleh memakai biru/hijau/kuning/merah, tetapi semantiknya harus
   konsisten.
+* Warna liga hanya untuk UI liga; jangan dipakai ulang untuk penekanan umum, agar
+  posisi liga pelajar bisa dibaca sekilas.
+* Nyawa memakai satu aksen hangat; nyawa yang habis berubah menjadi kelabu redup,
+  bukan merah kedua, agar biru utama tetap dominan.
 * Teks harus selalu memenuhi kontras terhadap permukaannya — teks gelap di
   permukaan terang, teks terang di permukaan gelap (berlaku juga untuk gradasi
   pemandangan 3D dan warna SVG/kanvas yang ditulis langsung).
@@ -360,6 +403,22 @@ Struktur lapisan: latar → kontainer halaman → kartu → kontrol → umpan ba
 * Kartu hero besar untuk "latihan rekomendasi hari ini".
 * Kartu sambutan pelatih, skor terakhir, runtutan, check-in mingguan, skenario
   rekomendasi.
+
+#### Jalur belajar (Journey)
+
+* **Strip status** berisi chip pil (runtutan, XP, nyawa, liga, pelindung) di atas
+  hero, masing-masing dengan ikon garis dan label satuan.
+* **Kartu hero** yang memasangkan judul dengan **cincin progres** conic-gradient;
+  cincin memakai biru merek dan melaporkan level selesai dari seluruh kurikulum.
+* **Peta jalur berkelok**: unit berbentuk akordeon; simpul level bergantian kiri
+  dan kanan di sepanjang tulang vertikal. Status simpul dibedakan jelas — biru
+  penuh dengan lencana nilai saat selesai, cincin biru saat terbuka, kelabu dengan
+  gembok saat terkunci. Tanpa emoji; ikon gembok dan centang berasal dari
+  `lucide-react`.
+* **Grid dua kolom** di bawah peta: jalur di kolom utama, papan liga mingguan dan
+  panel pengulangan SRS di kolom samping.
+* Gerak tetap tertahan: simpul bergeser sedikit saat hover, perayaan tetap kecil.
+  Semua animasi menghormati `prefers-reduced-motion`.
 
 #### Pustaka skenario
 
