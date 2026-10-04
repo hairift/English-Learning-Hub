@@ -10,6 +10,7 @@
     "dev:client": "vite --host 127.0.0.1",
     "dev:tts": "node scripts/start-tts.mjs",
     "build": "tsc -p tsconfig.json && vite build",
+    "prestart": "npm run build",
     "start": "tsx server/production.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
