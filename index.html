@@ -1,15 +1,24 @@
 <!doctype html>
-<html lang="id">
+<html lang="id" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/png" href="/brand/sela-ai.png" />
-    <meta name="theme-color" content="#1f7ae0" />
-    <meta
-      name="description"
-      content="Sela Tutor English — latihan berbicara bahasa Inggris dengan tutor AI bersuara, avatar 3D, dan laporan evaluasi menyeluruh."
-    />
-    <title>Sela Tutor English — AI English Speaking Tutor</title>
+    <meta name="color-scheme" content="light dark" />
+    <title>Cendekia Lingua · Platform Belajar Bahasa Inggris & AI Speaking Coach</title>
+    <script>
+      (function () {
+        try {
+          var tersimpan = localStorage.getItem("sela-tema-tampilan");
+          var tema =
+            tersimpan === "light" || tersimpan === "dark"
+              ? tersimpan
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.setAttribute("data-theme", tema);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

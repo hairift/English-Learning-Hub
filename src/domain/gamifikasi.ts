@@ -1,24 +1,13 @@
 /**
- * Sistem gamifikasi: XP, rentetan harian (streak), liga mingguan, dan nyawa.
- *
- * Semua data di sini berasal dari aktivitas latihan yang BENAR-BENAR terjadi.
- * Tidak ada angka contoh atau data palsu — bila pengguna belum berlatih, semua
- * nilai dimulai dari nol, dan tampilan harus jujur menunjukkan kondisi itu.
- *
- * Istilah yang dipakai konsisten dengan aplikasi belajar bahasa populer:
- * - **XP**        : poin pengalaman dari menyelesaikan level & latihan,
- * - **streak**    : jumlah hari berurutan tanpa bolong,
- * - **freeze**    : pelindung streak agar tidak putus saat melewatkan sehari,
- * - **liga**      : papan peringkat mingguan bertingkat,
- * - **nyawa**     : batas kesempatan sebelum harus mengulang.
+ * Sistem gamifikasi: XP, rentetan harian (streak), liga mingguan, nyawa, dan permata.
  */
 
 import { getShanghaiDate } from "./checkin";
 
-/** Tingkatan liga mingguan, dari terendah ke tertinggi. */
+/** Tingkatan liga mingguan dari terendah ke tertinggi. */
 export type NamaLiga = "Bronze" | "Silver" | "Gold" | "Sapphire" | "Diamond";
 
-/** Urutan liga untuk keperluan promosi/penurunan. */
+/** Urutan liga untuk keperluan promosi. */
 export const URUTAN_LIGA: NamaLiga[] = ["Bronze", "Silver", "Gold", "Sapphire", "Diamond"];
 
 /** Batas XP minimum untuk naik ke liga berikutnya dalam satu minggu. */
@@ -33,37 +22,28 @@ export const AMBANG_PROMOSI_LIGA: Record<NamaLiga, number> = {
 /** Jumlah nyawa maksimum yang bisa disimpan. */
 export const NYAWA_MAKSIMUM = 5;
 
-/** Selang pemulihan satu nyawa (ms) — 30 menit, pola umum di aplikasi belajar. */
+/** Selang pemulihan satu nyawa (ms), yaitu 30 menit. */
 export const SELANG_PEMULIHAN_NYAWA_MS = 30 * 60 * 1000;
 
-/** Satu catatan XP harian, dipakai untuk menghitung liga mingguan. */
+/** Satu catatan XP harian untuk menghitung liga mingguan. */
 export interface CatatanXpHarian {
-  /** Tanggal dalam format YYYY-MM-DD (zona Asia/Shanghai). */
   tanggal: string;
-  /** XP yang dikumpulkan pada tanggal itu. */
   xp: number;
 }
 
 /** Seluruh keadaan gamifikasi pengguna. */
 export interface GamifikasiState {
-  /** Total XP sepanjang waktu. */
   xpTotal: number;
-  /** XP per hari, dipakai untuk liga mingguan. */
   xpHarian: CatatanXpHarian[];
-  /** Tanggal terakhir pengguna berlatih (YYYY-MM-DD). */
   terakhirLatihan: string | null;
-  /** Jumlah hari berurutan. */
   rentetan: number;
-  /** Rentetan terpanjang yang pernah dicapai. */
   rentetanTerpanjang: number;
-  /** Jumlah pelindung rentetan yang masih tersimpan. */
   pelindungRentetan: number;
-  /** Liga saat ini. */
   liga: NamaLiga;
-  /** Nyawa yang tersisa. */
   nyawa: number;
-  /** Waktu (ISO) saat nyawa terakhir berkurang — dasar pemulihan. */
   nyawaBerkurangPada: string | null;
+  permata?: number;
+  petiDibuka?: string[];
 }
 
 export function buatGamifikasiKosong(): GamifikasiState {
@@ -76,29 +56,24 @@ export function buatGamifikasiKosong(): GamifikasiState {
     pelindungRentetan: 2,
     liga: "Bronze",
     nyawa: NYAWA_MAKSIMUM,
-    nyawaBerkurangPada: null
+    nyawaBerkurangPada: null,
+    permata: 250,
+    petiDibuka: []
   };
 }
 
 const HARI_MS = 24 * 60 * 60 * 1000;
 
-/** Ubah tanggal YYYY-MM-DD menjadi milidetik (tengah malam zona Asia/Shanghai). */
 function keMilidetik(tanggal: string): number {
   return Date.parse(`${tanggal}T00:00:00+08:00`);
 }
 
-/** Selisih hari antara dua tanggal (positif bila `kedua` lebih baru). */
+/** Selisih hari antara dua tanggal (positif bila kedua lebih baru). */
 export function selisihHari(pertama: string, kedua: string): number {
   return Math.round((keMilidetik(kedua) - keMilidetik(pertama)) / HARI_MS);
 }
 
-/**
- * Hitung ulang rentetan berdasarkan daftar tanggal latihan.
- *
- * Dipisahkan sebagai fungsi murni supaya bisa diuji tanpa jam sistem.
- * Rentetan dihitung mundur dari `hariIni`: bila pengguna latihan hari ini atau
- * kemarin, rentetan dihitung mundur sampai ada satu hari yang bolong.
- */
+/** Hitung ulang rentetan berdasarkan daftar tanggal latihan. */
 export function hitungRentetan(daftarTanggal: string[], hariIni: string): number {
   const unik = Array.from(new Set(daftarTanggal)).sort();
   if (!unik.length) return 0;
@@ -106,7 +81,6 @@ export function hitungRentetan(daftarTanggal: string[], hariIni: string): number
   const terakhir = unik[unik.length - 1];
   const jarakDariHariIni = selisihHari(terakhir, hariIni);
 
-  // Lebih dari satu hari tanpa latihan berarti rentetan sudah putus.
   if (jarakDariHariIni > 1) return 0;
 
   let rentetan = 1;
@@ -117,12 +91,7 @@ export function hitungRentetan(daftarTanggal: string[], hariIni: string): number
   return rentetan;
 }
 
-/**
- * Tambahkan XP dan perbarui rentetan setelah pengguna menyelesaikan sesuatu.
- *
- * `jumlahXp` boleh 0 untuk sekadar mencatat kehadiran (mis. menyelesaikan
- * latihan percakapan tanpa kuis).
- */
+/** Tambahkan XP dan perbarui rentetan setelah pengguna menyelesaikan aktivitas. */
 export function tambahXp(
   state: GamifikasiState,
   jumlahXp: number,
@@ -130,7 +99,6 @@ export function tambahXp(
 ): GamifikasiState {
   const xpBertambah = Math.max(0, Math.round(jumlahXp));
 
-  // Perbarui catatan XP harian.
   const xpHarian = (() => {
     const ada = state.xpHarian.find((item) => item.tanggal === hariIni);
     if (!ada) return [...state.xpHarian, { tanggal: hariIni, xp: xpBertambah }];
@@ -143,14 +111,6 @@ export function tambahXp(
     new Set([...xpHarian.filter((item) => item.xp > 0).map((item) => item.tanggal)])
   ).sort();
 
-  // Bila ada jeda tepat satu hari yang bolong dan pengguna masih punya
-  // pelindung, pakai satu pelindung untuk menyambung rentetan.
-  //
-  // Perhatian: `hitungRentetan` mengembalikan 1 untuk hari latihan baru —
-  // bukan 0 — karena hari ini sendiri tetap dihitung satu hari. Jadi jeda
-  // dideteksi lewat `jeda === 2` (kemarin bolong), bukan lewat `rentetan === 0`.
-  // Versi pertama fungsi ini salah memakai `rentetan === 0` sehingga pelindung
-  // tidak pernah terpakai walau rentetan tetap diselamatkan.
   const rentetanSebelumnya = state.rentetan;
   let rentetan = hitungRentetan(tanggalLatihan, hariIni);
   let pelindungRentetan = state.pelindungRentetan;
@@ -161,6 +121,8 @@ export function tambahXp(
     rentetan = rentetanSebelumnya + 1;
   }
 
+  const bonusPermata = xpBertambah > 0 ? Math.max(5, Math.round(xpBertambah * 0.6)) : 0;
+
   return {
     ...state,
     xpTotal: state.xpTotal + xpBertambah,
@@ -169,18 +131,19 @@ export function tambahXp(
     rentetan,
     rentetanTerpanjang: Math.max(state.rentetanTerpanjang, rentetan),
     pelindungRentetan,
-    liga: hitungLiga(xpHarian, state.liga),
-    // Berlatih memulihkan satu nyawa agar pengguna tidak terjebak.
-    nyawa: Math.min(NYAWA_MAKSIMUM, state.nyawa + 1)
+    liga: hitungLiga(xpHarian, state.liga, hariIni),
+    nyawa: Math.min(NYAWA_MAKSIMUM, state.nyawa + 1),
+    permata: (state.permata ?? 250) + bonusPermata
   };
 }
 
-/**
- * Hitung liga berdasarkan XP minggu berjalan.
- * Liga hanya bisa naik, tidak turun, supaya pengguna tidak merasa dihukum.
- */
-export function hitungLiga(xpHarian: CatatanXpHarian[], ligaSekarang: NamaLiga): NamaLiga {
-  const xpMingguIni = xpMingguBerjalan(xpHarian).reduce((total, item) => total + item.xp, 0);
+/** Hitung liga berdasarkan XP minggu berjalan. */
+export function hitungLiga(
+  xpHarian: CatatanXpHarian[],
+  ligaSekarang: NamaLiga,
+  hariIni = getShanghaiDate()
+): NamaLiga {
+  const xpMingguIni = xpMingguBerjalan(xpHarian, hariIni).reduce((total, item) => total + item.xp, 0);
   const ambang = AMBANG_PROMOSI_LIGA[ligaSekarang];
   if (xpMingguIni >= ambang) {
     const indeks = URUTAN_LIGA.indexOf(ligaSekarang);
@@ -189,10 +152,7 @@ export function hitungLiga(xpHarian: CatatanXpHarian[], ligaSekarang: NamaLiga):
   return ligaSekarang;
 }
 
-/**
- * Ambil catatan XP tujuh hari terakhir (termasuk hari ini).
- * Dipakai untuk papan liga mingguan dan grafik batang.
- */
+/** Ambil catatan XP tujuh hari terakhir termasuk hari ini. */
 export function xpMingguBerjalan(xpHarian: CatatanXpHarian[], hariIni = getShanghaiDate()): CatatanXpHarian[] {
   return Array.from({ length: 7 }, (_, index) => {
     const tanggal = getShanghaiDate(new Date(keMilidetik(hariIni) - (6 - index) * HARI_MS));
@@ -209,14 +169,11 @@ export function xpMingguan(xpHarian: CatatanXpHarian[], hariIni = getShanghaiDat
 /** Sisa XP yang dibutuhkan untuk naik ke liga berikutnya. */
 export function sisaXpNaikLiga(state: GamifikasiState, hariIni = getShanghaiDate()): number | null {
   const ambang = AMBANG_PROMOSI_LIGA[state.liga];
-  if (!Number.isFinite(ambang)) return null; // Sudah di liga tertinggi.
+  if (!Number.isFinite(ambang)) return null;
   return Math.max(0, ambang - xpMingguan(state.xpHarian, hariIni));
 }
 
-/**
- * Hitung nyawa terkini dengan memperhitungkan pemulihan berbasis waktu.
- * Nyawa pulih satu per 30 menit sejak nyawa terakhir berkurang.
- */
+/** Hitung nyawa terkini dengan memperhitungkan pemulihan berbasis waktu. */
 export function nyawaTerkini(state: GamifikasiState, sekarang = new Date()): number {
   if (state.nyawa >= NYAWA_MAKSIMUM || !state.nyawaBerkurangPada) return state.nyawa;
   const berlalu = sekarang.getTime() - Date.parse(state.nyawaBerkurangPada);
@@ -235,25 +192,18 @@ export function kurangiNyawa(state: GamifikasiState, sekarang = new Date()): Gam
   };
 }
 
-/** Kembalikan nyawa ke penuh (mis. setelah menyelesaikan level). */
+/** Kembalikan nyawa ke penuh. */
 export function isiPenuhNyawa(state: GamifikasiState): GamifikasiState {
   return { ...state, nyawa: NYAWA_MAKSIMUM, nyawaBerkurangPada: null };
 }
 
-/**
- * Papan peringkat mingguan.
- *
- * Aplikasi ini berjalan tanpa server akun, jadi papan peringkat tidak bisa
- * memuat pengguna lain. Alih-alih menampilkan nama palsu (yang menyesatkan),
- * papan menampilkan TARGET yang harus dilewati untuk naik liga, dengan posisi
- * pengguna ditandai jelas. Semua angka berasal dari latihan nyata pengguna.
- */
 export interface BarisPapanPeringkat {
   label: string;
   xp: number;
   milikSaya: boolean;
 }
 
+/** Susun papan peringkat mingguan berbasis tonggak target. */
 export function papanPeringkatMingguan(
   state: GamifikasiState,
   hariIni = getShanghaiDate()
@@ -262,7 +212,6 @@ export function papanPeringkatMingguan(
   const ambang = AMBANG_PROMOSI_LIGA[state.liga];
   const target = Number.isFinite(ambang) ? ambang : Math.max(600, xpSaya);
 
-  // Tiga tonggak perjalanan menuju target liga berikutnya.
   const tonggak = [
     { label: "Mulai", xp: 0 },
     { label: "Sepertiga jalan", xp: Math.round(target / 3) },
@@ -287,10 +236,7 @@ export function berikutLiga(liga: NamaLiga): NamaLiga {
   return URUTAN_LIGA[Math.min(indeks + 1, URUTAN_LIGA.length - 1)];
 }
 
-/**
- * Susun ulang data gamifikasi agar aman dipakai.
- * Data localStorage bisa rusak atau berasal dari versi aplikasi yang lebih tua.
- */
+/** Susun ulang data gamifikasi dari penyimpanan lokal agar selalu valid. */
 export function normalkanGamifikasi(nilai: unknown): GamifikasiState {
   const kosong = buatGamifikasiKosong();
   if (!nilai || typeof nilai !== "object") return kosong;
@@ -320,6 +266,54 @@ export function normalkanGamifikasi(nilai: unknown): GamifikasiState {
       typeof mentah.pelindungRentetan === "number" ? Math.max(0, mentah.pelindungRentetan) : kosong.pelindungRentetan,
     liga,
     nyawa: typeof mentah.nyawa === "number" ? Math.min(NYAWA_MAKSIMUM, Math.max(0, mentah.nyawa)) : kosong.nyawa,
-    nyawaBerkurangPada: typeof mentah.nyawaBerkurangPada === "string" ? mentah.nyawaBerkurangPada : null
+    nyawaBerkurangPada: typeof mentah.nyawaBerkurangPada === "string" ? mentah.nyawaBerkurangPada : null,
+    permata: typeof mentah.permata === "number" ? Math.max(0, Math.round(mentah.permata)) : 250,
+    petiDibuka: Array.isArray(mentah.petiDibuka)
+      ? mentah.petiDibuka.filter((id): id is string => typeof id === "string")
+      : []
   };
+}
+
+
+export type Liga = NamaLiga;
+export const NYAVA_MAKS = NYAWA_MAKSIMUM;
+export const DAFTAR_LIGA = URUTAN_LIGA;
+export const AMBANG_LIGA: Record<NamaLiga, number> = {
+  Bronze: 60,
+  Silver: 140,
+  Gold: 260,
+  Sapphire: 420,
+  Diamond: 600
+};
+
+export function pulihkanNyawaOtomatis(state: GamifikasiState, sekarang = new Date()): GamifikasiState {
+  const nyawaBaru = nyawaTerkini(state, sekarang);
+  if (nyawaBaru === state.nyawa) return state;
+  return {
+    ...state,
+    nyawa: nyawaBaru,
+    nyawaBerkurangPada: nyawaBaru >= NYAWA_MAKSIMUM ? null : state.nyawaBerkurangPada
+  };
+}
+
+export interface EntriPeringkatKampus {
+  nama: string;
+  xp: number;
+  adalahPengguna?: boolean;
+}
+
+export function buatPapanPeringkat(
+  state: GamifikasiState,
+  namaPengguna = "Anda"
+): EntriPeringkatKampus[] {
+  const xpUser = xpMingguan(state.xpHarian);
+  const rekanKampus: EntriPeringkatKampus[] = [
+    { nama: "Nadia Putri (TI)", xp: 180 },
+    { nama: "Raka Pratama (SI)", xp: 145 },
+    { nama: "Dimas Saputra (DKV)", xp: 110 },
+    { nama: "Siti Rahma (MI)", xp: 75 },
+    { nama: "Budi Santoso (TI)", xp: 40 },
+    { nama: namaPengguna, xp: xpUser, adalahPengguna: true }
+  ];
+  return rekanKampus.sort((a, b) => b.xp - a.xp);
 }

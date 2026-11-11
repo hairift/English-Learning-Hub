@@ -1,85 +1,83 @@
 /**
- * suaraBrowser.ts — pembungkus `speechSynthesis` bawaan browser.
- *
- * Peran modul ini adalah menjadi jalur cadangan yang BENAR-BENAR andal ketika
- * layanan TTS utama (Supertonic) tidak tersedia. Sebelumnya jalur ini rapuh:
- *
- * - Suara tidak dipilih berdasarkan bahasa, sehingga browser bisa memilih suara
- *   yang salah (atau tidak bersuara sama sekali).
- * - Gerakan mulut avatar bergantung pada kejadian `onstart`, padahal browser
- *   tidak selalu memicunya (mis. saat belum ada suara yang terpasang).
- * - Tidak ada batas waktu, sehingga percakapan bisa "menggantung" selamanya
- *   bila `onend` tidak pernah datang.
- *
- * Modul ini memperbaiki ketiganya: pemilihan suara cerdas, gerakan mulut yang
- * langsung berjalan tanpa menunggu `onstart`, sinkronisasi lewat `onboundary`,
- * dan pengaman waktu yang memastikan alur percakapan selalu lanjut.
+ * suaraBrowser.ts - Mesin sintesis suara (Web Speech API) alami yang mendukung
+ * pemilihan suara berdasarkan bahasa (Inggris / Indonesia) dan gender karakter
+ * (perempuan / laki-laki), lengkap dengan sinkronisasi gerak mulut.
  */
 
 import { mulaiGerakMulut, perkirakanDurasiUcapanMs, type KendaliMulut } from "./lipsync/gerakMulut";
 
-/** Daftar suara yang tersedia di browser (di-cache). */
+export type GenderSuara = "perempuan" | "laki";
+
 let daftarSuara: SpeechSynthesisVoice[] = [];
 let pendengarSuaraTerpasang = false;
 
-/**
- * Nama suara yang diprioritaskan untuk tiap bahasa (huruf kecil).
- *
- * Daftar ini disusun **perempuan lebih dulu**, karena tutor aplikasi ini
- * perempuan dan suaranya harus konsisten antar-perangkat. Nama-nama ini adalah
- * suara bawaan sistem yang paling luas ketersediaannya:
- * - `microsoft gadis` / `damayanti` / `andika` → Windows & Android Indonesia
- * - `google bahasa indonesia` → Chrome Indonesia
- * - `microsoft aria` / `jenny` / `zira` / `samantha` → suara perempuan Inggris
- */
-const PRIORITAS_SUARA: Record<"id" | "en", string[]> = {
+const PRIORITAS_SUARA_PEREMPUAN: Record<"id" | "en", string[]> = {
   id: [
-    "google bahasa indonesia",
+    "microsoft gadis online (natural)",
     "microsoft gadis",
+    "google bahasa indonesia",
     "gadis",
     "damayanti",
-    "damayanti indonesian",
-    "microsoft andika",
-    "andika"
+    "damayanti indonesian"
   ],
   en: [
+    "microsoft aria online (natural)",
+    "microsoft jenny online (natural)",
+    "microsoft sonia online (natural)",
+    "microsoft michelle online (natural)",
     "google us english",
+    "google uk english female",
     "microsoft aria",
     "microsoft jenny",
     "microsoft zira",
     "samantha",
-    "google uk english female",
-    "microsoft michelle",
-    "microsoft sonia"
+    "karen",
+    "victoria"
   ]
 };
 
-/**
- * Penanda nama yang biasanya berarti suara perempuan.
- * Dipakai sebagai sinyal tambahan, bukan penentu tunggal.
- */
+const PRIORITAS_SUARA_LAKI: Record<"id" | "en", string[]> = {
+  id: [
+    "microsoft ardi online (natural)",
+    "microsoft ardi",
+    "ardi",
+    "google bahasa indonesia"
+  ],
+  en: [
+    "microsoft guy online (natural)",
+    "microsoft christopher online (natural)",
+    "microsoft ryan online (natural)",
+    "microsoft andrew online (natural)",
+    "microsoft brian online (natural)",
+    "google uk english male",
+    "microsoft guy",
+    "microsoft christopher",
+    "microsoft david",
+    "microsoft mark",
+    "daniel",
+    "alex",
+    "james"
+  ]
+};
+
 const PENANDA_PEREMPUAN = [
-  "female", "woman", "gadis", "damayanti", "andika", "aria", "jenny",
+  "female", "woman", "gadis", "damayanti", "aria", "jenny",
   "zira", "samantha", "michelle", "sonia", "siti", "dewi", "putri",
-  "wanita", "perempuan"
+  "wanita", "perempuan", "karen", "victoria", "clara"
 ];
 
-/**
- * Penanda nama yang biasanya berarti suara laki-laki.
- * Dipakai untuk MENGHINDARI suara ini, bukan untuk memilihnya.
- */
 const PENANDA_LAKI = [
   "male", "man", "david", "mark", "george", "james", "daniel", "alex",
-  "fred", "rishi", "arif", "budi"
+  "fred", "rishi", "arif", "budi", "ardi", "guy", "christopher", "ryan",
+  "andrew", "brian", "eric", "steffan", "roger"
 ];
 
-/** Kode bahasa yang dicari untuk tiap bahasa aplikasi. */
 const KODE_BAHASA: Record<"id" | "en", string[]> = {
   id: ["id-id", "id"],
   en: ["en-us", "en-gb", "en-au", "en"]
 };
 
-/** Ambil daftar suara, sekaligus pasang pendengar `voiceschanged` sekali saja. */
+/** Ambil daftar suara dari browser dan pasang pendengar perubahan suara. */
 export function ambilDaftarSuara(): SpeechSynthesisVoice[] {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return [];
   const sekarang = window.speechSynthesis.getVoices();
@@ -87,7 +85,6 @@ export function ambilDaftarSuara(): SpeechSynthesisVoice[] {
 
   if (!pendengarSuaraTerpasang) {
     pendengarSuaraTerpasang = true;
-    // Chrome memuat daftar suara secara asinkron.
     window.speechSynthesis.addEventListener?.("voiceschanged", () => {
       daftarSuara = window.speechSynthesis.getVoices();
     });
@@ -95,30 +92,28 @@ export function ambilDaftarSuara(): SpeechSynthesisVoice[] {
   return daftarSuara;
 }
 
-/** True bila browser punya mesin suara sama sekali. */
+/** Periksa apakah browser memiliki daftar suara yang siap dipakai. */
 export function browserPunyaSuara(): boolean {
   return ambilDaftarSuara().length > 0;
 }
 
 /**
- * Pilih suara terbaik untuk bahasa tertentu.
- *
- * Urutan penilaian: kecocokan kode bahasa dinilai paling tinggi, lalu nama yang
- * ada di daftar prioritas, lalu sinyal "suara perempuan", lalu suara non-lokal
- * (biasanya lebih natural karena dirender di server).
- *
- * Suara laki-laki diberi penalti besar supaya tutor tetap bersuara perempuan
- * konsisten di semua perangkat.
+ * Pilih suara paling natural sesuai bahasa dan gender karakter.
  */
-export function pilihSuaraTerbaik(lang: "id" | "en"): SpeechSynthesisVoice | null {
+export function pilihSuaraTerbaik(
+  lang: "id" | "en",
+  gender: GenderSuara = "perempuan"
+): SpeechSynthesisVoice | null {
   const daftar = ambilDaftarSuara();
   if (daftar.length === 0) return null;
 
   const kode = KODE_BAHASA[lang];
-  const prioritas = PRIORITAS_SUARA[lang];
+  const prioritas = gender === "laki" ? PRIORITAS_SUARA_LAKI[lang] : PRIORITAS_SUARA_PEREMPUAN[lang];
+  const penandaCocok = gender === "laki" ? PENANDA_LAKI : PENANDA_PEREMPUAN;
+  const penandaLawan = gender === "laki" ? PENANDA_PEREMPUAN : PENANDA_LAKI;
 
   let terbaik: SpeechSynthesisVoice | null = null;
-  let skorTerbaik = -1;
+  let skorTerbaik = -999;
 
   for (const suara of daftar) {
     const nama = (suara.name || "").toLowerCase();
@@ -126,15 +121,15 @@ export function pilihSuaraTerbaik(lang: "id" | "en"): SpeechSynthesisVoice | nul
 
     let skor = 0;
     if (kodeSuara === kode[0]) skor += 100;
-    else if (kode.some((k) => kodeSuara.startsWith(k))) skor += 70;
-    else continue; // Bahasa tidak cocok: jangan dipakai sama sekali.
+    else if (kode.some((k) => kodeSuara.startsWith(k))) skor += 75;
+    else continue;
 
     const indeksPrioritas = prioritas.findIndex((namaPrioritas) => nama.includes(namaPrioritas));
-    if (indeksPrioritas >= 0) skor += 40 - indeksPrioritas * 3;
-    if (PENANDA_PEREMPUAN.some((penanda) => nama.includes(penanda))) skor += 18;
-    if (PENANDA_LAKI.some((penanda) => nama.includes(penanda))) skor -= 30;
-    if (nama.includes("natural") || nama.includes("online")) skor += 12;
-    if (!suara.localService) skor += 6;
+    if (indeksPrioritas >= 0) skor += 55 - indeksPrioritas * 3;
+    if (penandaCocok.some((penanda) => nama.includes(penanda))) skor += 28;
+    if (penandaLawan.some((penanda) => nama.includes(penanda))) skor -= 40;
+    if (nama.includes("natural") || nama.includes("neural") || nama.includes("online")) skor += 20;
+    if (!suara.localService) skor += 8;
     if (suara.default) skor += 2;
 
     if (skor > skorTerbaik) {
@@ -146,10 +141,7 @@ export function pilihSuaraTerbaik(lang: "id" | "en"): SpeechSynthesisVoice | nul
   return terbaik;
 }
 
-/**
- * Daftar suara yang tersedia untuk sebuah bahasa, terurut dari yang terbaik.
- * Dipakai panel pengaturan (khusus developer) untuk memilih suara manual.
- */
+/** Daftar suara yang tersedia untuk sebuah bahasa, diurutkan dari yang paling natural. */
 export function daftarSuaraUntukBahasa(lang: "id" | "en"): SpeechSynthesisVoice[] {
   const kode = KODE_BAHASA[lang];
   return ambilDaftarSuara()
@@ -161,20 +153,13 @@ export function daftarSuaraUntukBahasa(lang: "id" | "en"): SpeechSynthesisVoice[
       const namaA = (a.name || "").toLowerCase();
       const namaB = (b.name || "").toLowerCase();
       const peringkat = (nama: string) =>
-        (PENANDA_PEREMPUAN.some((penanda) => nama.includes(penanda)) ? -1 : 0) +
-        (PENANDA_LAKI.some((penanda) => nama.includes(penanda)) ? 1 : 0);
+        (nama.includes("natural") ? -2 : 0) +
+        (PENANDA_PEREMPUAN.some((penanda) => nama.includes(penanda)) ? -1 : 0);
       return peringkat(namaA) - peringkat(namaB) || a.name.localeCompare(b.name);
     });
 }
 
-/**
- * Tunggu sampai browser selesai memuat daftar suara.
- *
- * Chrome mengisi daftar suara secara ASINKRON: `getVoices()` sering
- * mengembalikan array kosong pada panggilan pertama, lalu terisi setelah
- * kejadian `voiceschanged`. Tanpa menunggu, aplikasi akan menyimpulkan "tidak
- * ada suara" dan jatuh ke jalur tanpa suara.
- */
+/** Tunggu hingga browser memuat daftar suara secara asinkron. */
 export function tungguDaftarSuara(batasMs = 2500): Promise<SpeechSynthesisVoice[]> {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
     return Promise.resolve([]);
@@ -195,48 +180,39 @@ export function tungguDaftarSuara(batasMs = 2500): Promise<SpeechSynthesisVoice[
     };
     const batas = setTimeout(akhiri, batasMs);
     mesin.addEventListener?.("voiceschanged", akhiri);
-    // Beberapa peramban hanya mengisi daftar setelah `speak()` dipanggil sekali.
     try {
       mesin.getVoices();
     } catch {
-      // Abaikan: bukan kegagalan fatal.
+      // Abaikan bila gagal memuat suara awal.
     }
   });
 }
 
 export type OpsiUcapBrowser = {
-  /** Teks asli (dipakai untuk menyusun gerakan mulut). */
   teks: string;
-  /** Teks siap ucap (sudah dinormalisasi angka/singkatan). */
   teksUcap: string;
-  /** Bahasa yang dipakai. */
   lang: "id" | "en";
-  /** Kecepatan bicara (1 = normal). */
+  gender?: GenderSuara;
   rate?: number;
-  /** Nada suara (1 = normal). Sedikit lebih tinggi membuat suara terdengar lebih ramah. */
   pitch?: number;
-  /** Panggil paksa suara tertentu (dipakai saat pengguna memilih suara sendiri). */
   suara?: SpeechSynthesisVoice | null;
-  /** Dipanggil saat suara mulai terdengar (atau saat pengaman waktu aktif). */
   onMulai?: () => void;
-  /** Dipanggil tepat sekali saat ucapan selesai / dibatalkan pengaman. */
   onSelesai?: () => void;
 };
 
-/** Kendali ucapan yang dikembalikan ke pemanggil. */
 export type KendaliUcapBrowser = {
-  /** Hentikan ucapan tanpa memicu `onSelesai`. */
   batalkan: () => void;
 };
 
 /**
- * Ucapkan teks memakai suara bawaan browser + gerakan mulut yang selalu hidup.
- *
- * Gerakan mulut dimulai SEGERA (tidak menunggu `onstart`) supaya avatar tidak
- * pernah tampak "bisu" meski browser lambat memicu kejadiannya.
+ * Ucapkan teks menggunakan speechSynthesis browser sesuai bahasa dan gender karakter.
  */
 export function ucapkanDenganBrowser(opsi: OpsiUcapBrowser): KendaliUcapBrowser {
-  const { teks, teksUcap, lang, rate = 0.95, pitch = 1.05 } = opsi;
+  const gender = opsi.gender ?? "perempuan";
+  const rate = opsi.rate ?? (opsi.lang === "en" ? 0.94 : 0.98);
+  const pitchDefault = gender === "laki" ? 0.88 : 1.04;
+  const pitch = opsi.pitch ?? pitchDefault;
+  const { teks, teksUcap, lang } = opsi;
 
   let selesai = false;
   let timerPengaman: ReturnType<typeof setTimeout> | null = null;
@@ -258,13 +234,10 @@ export function ucapkanDenganBrowser(opsi: OpsiUcapBrowser): KendaliUcapBrowser 
     opsi.onSelesai?.();
   };
 
-  // Gerakan mulut langsung berjalan dari teks.
-  mulut = mulaiGerakMulut(teks, { durasiMs: perkirakanDurasiUcapanMs(teks) / Math.max(0.6, rate) });
+  mulut = mulaiGerakMulut(teks, { durasiMs: perkirakanDurasiUcapanMs(teks) / Math.max(0.55, rate) });
   opsi.onMulai?.();
 
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    // Tidak ada mesin suara: tetap selesaikan setelah perkiraan durasi agar
-    // alur percakapan tidak menggantung.
     timerPengaman = globalThis.setTimeout(selesaikan, perkirakanDurasiUcapanMs(teks) + 600);
     return { batalkan: () => { selesai = true; bersihkan(); } };
   }
@@ -278,16 +251,12 @@ export function ucapkanDenganBrowser(opsi: OpsiUcapBrowser): KendaliUcapBrowser 
   utterance.pitch = pitch;
   utterance.volume = 1;
 
-  const suara = opsi.suara ?? pilihSuaraTerbaik(lang);
+  const suara = opsi.suara ?? pilihSuaraTerbaik(lang, gender);
   if (suara) {
     utterance.voice = suara;
-    // Selaraskan kode bahasa dengan suara yang benar-benar dipakai. Bila tidak,
-    // sebagian peramban mengabaikan `voice` dan jatuh ke suara bawaan.
     utterance.lang = suara.lang || utterance.lang;
   }
 
-  // Chrome punya bug lama: ucapan panjang kadang terpotong di tengah karena
-  // mesin mengira sudah selesai. Memanggil `resume()` berkala menjaganya hidup.
   let pengawasJeda: ReturnType<typeof setInterval> | null = null;
   const hentikanPengawas = () => {
     if (pengawasJeda !== null) {
@@ -296,7 +265,6 @@ export function ucapkanDenganBrowser(opsi: OpsiUcapBrowser): KendaliUcapBrowser 
     }
   };
 
-  // Sinkronkan gerakan mulut ke kata yang sedang diucapkan.
   utterance.onboundary = (kejadian: SpeechSynthesisEvent) => {
     if (typeof kejadian.charIndex === "number") mulut?.lompatKeKarakter(kejadian.charIndex);
   };
@@ -310,9 +278,7 @@ export function ucapkanDenganBrowser(opsi: OpsiUcapBrowser): KendaliUcapBrowser 
     selesaikan();
   };
 
-  // Pengaman: bila browser tidak pernah memicu `onend` (mis. suara hilang di
-  // tengah jalan), paksa selesai setelah perkiraan durasi + kelonggaran.
-  const perkiraan = perkirakanDurasiUcapanMs(teks) / Math.max(0.6, rate);
+  const perkiraan = perkirakanDurasiUcapanMs(teks) / Math.max(0.55, rate);
   timerPengaman = setTimeout(() => {
     hentikanPengawas();
     selesaikan();
@@ -320,7 +286,6 @@ export function ucapkanDenganBrowser(opsi: OpsiUcapBrowser): KendaliUcapBrowser 
 
   try {
     mesin.speak(utterance);
-    // Jaga ucapan tetap berjalan (lihat catatan bug Chrome di atas).
     pengawasJeda = setInterval(() => {
       if (selesai) {
         hentikanPengawas();
@@ -340,9 +305,53 @@ export function ucapkanDenganBrowser(opsi: OpsiUcapBrowser): KendaliUcapBrowser 
       try {
         mesin.cancel();
       } catch {
-        // Menghentikan ucapan yang sudah mati bukan masalah.
+        // Abaikan bila sudah berhenti.
       }
       bersihkan();
     }
   };
+}
+
+let kendaliAktif: KendaliUcapBrowser | null = null;
+
+export interface OpsiUcapRingkas {
+  lang?: "id" | "en";
+  gender?: GenderSuara;
+  rate?: number;
+  pitch?: number;
+  onStart?: () => void;
+  onEnd?: () => void;
+}
+
+/**
+ * Fungsi pembantu ringkas untuk membacakan teks bahasa Inggris/Indonesia
+ * di kuis, kartu kosakata, buku panduan, dan laboratorium bunyi.
+ */
+export function ucapkan(teks: string, opsi: OpsiUcapRingkas = {}): KendaliUcapBrowser {
+  kendaliAktif?.batalkan();
+  const kendali = ucapkanDenganBrowser({
+    teks,
+    teksUcap: teks,
+    lang: opsi.lang ?? "en",
+    gender: opsi.gender ?? "perempuan",
+    rate: opsi.rate,
+    pitch: opsi.pitch,
+    onMulai: opsi.onStart,
+    onSelesai: opsi.onEnd
+  });
+  kendaliAktif = kendali;
+  return kendali;
+}
+
+/** Hentikan suara yang sedang diputar di browser. */
+export function bersihkanSuara(): void {
+  kendaliAktif?.batalkan();
+  kendaliAktif = null;
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      // Abaikan bila gagal membatalkan.
+    }
+  }
 }

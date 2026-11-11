@@ -12,6 +12,7 @@ import {
 } from "./domain/learning";
 import type { Scenario } from "../server/data";
 import {
+  NYAVA_MAKS,
   buatGamifikasiKosong,
   normalkanGamifikasi,
   tambahXp,
@@ -23,8 +24,18 @@ import {
   normalkanProgres,
   type ProgresJalur
 } from "./domain/progresJalur";
-import { normalkanSrs, type KartuSrs } from "./domain/srs";
-import type { HasilPenempatan } from "./domain/srs";
+import { normalkanSrs, type KartuSrs, type HasilPenempatan } from "./domain/srs";
+import {
+  buatDiagnostikKosong,
+  buatProfilDefault,
+  catatHasilSpeaking,
+  catatPercobaanKuis,
+  normalkanDiagnostik,
+  normalkanProfil,
+  type DataDiagnostikRiset,
+  type KategoriKemampuan,
+  type ProfilMahasiswa
+} from "./domain/diagnostikRiset";
 
 const KEY = "ai-speaking-coach-checkin";
 const LEARNING_KEY = "ai-speaking-coach-learning";
@@ -34,22 +45,37 @@ const JALUR_KEY = "sela-jalur-belajar";
 const GAMIFIKASI_KEY = "sela-gamifikasi";
 const SRS_KEY = "sela-srs";
 const PENEMPATAN_KEY = "sela-placement";
+const DIAGNOSTIK_KEY = "sela-diagnostik-riset";
+const PROFIL_KEY = "sela-profil-mahasiswa";
+const TEMA_KEY = "sela-tema-tampilan";
 
-/**
- * Bahasa pengenalan suara (ASR) yang dipilih pengguna.
- *
- * `auto` berarti aplikasi memilih sendiri dan menyesuaikan antar sesi rekaman
- * (lihat `mulaiMikrofon`), karena Web Speech API tidak bisa mendeteksi bahasa
- * secara langsung dalam satu sesi.
- */
 export type BahasaAsr = "auto" | "id-ID" | "en-US";
+export type TemaTampilan = "dark" | "light";
+
+export function loadTema(): TemaTampilan {
+  try {
+    const raw = localStorage.getItem(TEMA_KEY);
+    if (raw === "light" || raw === "dark") return raw;
+  } catch {
+    // Penyimpanan lokal tidak tersedia
+  }
+  return "dark";
+}
+
+export function saveTema(tema: TemaTampilan) {
+  try {
+    localStorage.setItem(TEMA_KEY, tema);
+  } catch {
+    // Abaikan jika mode privat
+  }
+}
 
 export function loadBahasaAsr(): BahasaAsr {
   try {
     const raw = localStorage.getItem(ASR_LANGUAGE_KEY);
     if (raw === "id-ID" || raw === "en-US" || raw === "auto") return raw;
   } catch {
-    // Penyimpanan tidak tersedia (mode privat): pakai nilai default.
+    // Abaikan jika mode privat
   }
   return "auto";
 }
@@ -58,7 +84,7 @@ export function saveBahasaAsr(nilai: BahasaAsr) {
   try {
     localStorage.setItem(ASR_LANGUAGE_KEY, nilai);
   } catch {
-    // Penyimpanan tidak tersedia (mode privat): abaikan dengan aman.
+    // Abaikan jika mode privat
   }
 }
 
@@ -135,9 +161,6 @@ function isScenarioLike(value: unknown): value is Scenario {
   );
 }
 
-/* ===================== JALUR BELAJAR (jalur + gamifikasi) ===================== */
-
-/** Baca kemajuan jalur belajar (level mana yang sudah lulus). */
 export function loadJalur(): ProgresJalur {
   try {
     const raw = localStorage.getItem(JALUR_KEY);
@@ -151,11 +174,10 @@ export function saveJalur(state: ProgresJalur) {
   try {
     localStorage.setItem(JALUR_KEY, JSON.stringify(state));
   } catch {
-    // Penyimpanan tidak tersedia (mode privat): abaikan dengan aman.
+    // Abaikan jika penyimpanan lokal penuh atau privat
   }
 }
 
-/** Catat penyelesaian sebuah level, lalu perbarui XP & rentetan sekaligus. */
 export function selesaikanLevel(masukan: {
   idLevel: string;
   benar: number;
@@ -164,12 +186,16 @@ export function selesaikanLevel(masukan: {
 }): { jalur: ProgresJalur; gamifikasi: GamifikasiState } {
   const jalur = catatLevelSelesai(loadJalur(), masukan);
   saveJalur(jalur);
-  const gamifikasi = tambahXp(loadGamifikasi(), masukan.xp);
+  const gamifikasiSekarang = loadGamifikasi();
+  const bonusPermata = masukan.benar === masukan.total ? 15 : 8;
+  const gamifikasi = {
+    ...tambahXp(gamifikasiSekarang, masukan.xp),
+    permata: (gamifikasiSekarang.permata ?? 500) + bonusPermata
+  };
   saveGamifikasi(gamifikasi);
   return { jalur, gamifikasi };
 }
 
-/** Baca keadaan gamifikasi (XP, rentetan, liga, nyawa). */
 export function loadGamifikasi(): GamifikasiState {
   try {
     const raw = localStorage.getItem(GAMIFIKASI_KEY);
@@ -183,18 +209,59 @@ export function saveGamifikasi(state: GamifikasiState) {
   try {
     localStorage.setItem(GAMIFIKASI_KEY, JSON.stringify(state));
   } catch {
-    // Penyimpanan tidak tersedia (mode privat): abaikan dengan aman.
+    // Abaikan jika penyimpanan lokal tidak tersedia
   }
 }
 
-/** Tambahkan XP saja (mis. setelah sesi percakapan dengan tutor suara). */
 export function tambahXpSaja(jumlahXp: number): GamifikasiState {
   const next = tambahXp(loadGamifikasi(), jumlahXp);
   saveGamifikasi(next);
   return next;
 }
 
-/* ============================ SRS & PLACEMENT ============================ */
+export function bukaPetiUnit(idPeti: string, hadiahPermata = 25): GamifikasiState {
+  const sekarang = loadGamifikasi();
+  const daftarPeti = sekarang.petiDibuka ?? [];
+  if (daftarPeti.includes(idPeti)) return sekarang;
+  const baru: GamifikasiState = {
+    ...sekarang,
+    permata: (sekarang.permata ?? 250) + hadiahPermata,
+    petiDibuka: [...daftarPeti, idPeti]
+  };
+  saveGamifikasi(baru);
+  return baru;
+}
+
+export function beliIsiNyawa(hargaPermata = 100): { berhasil: boolean; state: GamifikasiState } {
+  const sekarang = loadGamifikasi();
+  const saldoPermata = sekarang.permata ?? 250;
+  if (saldoPermata < hargaPermata || sekarang.nyawa >= NYAVA_MAKS) {
+    return { berhasil: false, state: sekarang };
+  }
+  const baru: GamifikasiState = {
+    ...sekarang,
+    permata: saldoPermata - hargaPermata,
+    nyawa: NYAVA_MAKS,
+    nyawaBerkurangPada: null
+  };
+  saveGamifikasi(baru);
+  return { berhasil: true, state: baru };
+}
+
+export function beliPelindungRentetan(hargaPermata = 150): { berhasil: boolean; state: GamifikasiState } {
+  const sekarang = loadGamifikasi();
+  const saldoPermata = sekarang.permata ?? 250;
+  if (saldoPermata < hargaPermata || sekarang.pelindungRentetan >= 3) {
+    return { berhasil: false, state: sekarang };
+  }
+  const baru: GamifikasiState = {
+    ...sekarang,
+    permata: saldoPermata - hargaPermata,
+    pelindungRentetan: sekarang.pelindungRentetan + 1
+  };
+  saveGamifikasi(baru);
+  return { berhasil: true, state: baru };
+}
 
 export function loadSrs(): KartuSrs[] {
   try {
@@ -209,11 +276,10 @@ export function saveSrs(kartu: KartuSrs[]) {
   try {
     localStorage.setItem(SRS_KEY, JSON.stringify(kartu));
   } catch {
-    // Penyimpanan tidak tersedia (mode privat): abaikan dengan aman.
+    // Abaikan jika mode privat
   }
 }
 
-/** Hasil placement test yang sudah disimpan. */
 export interface PenempatanTersimpan {
   hasil: HasilPenempatan;
   dikerjakanPada: string;
@@ -236,6 +302,63 @@ export function savePenempatan(hasil: HasilPenempatan) {
     const data: PenempatanTersimpan = { hasil, dikerjakanPada: new Date().toISOString() };
     localStorage.setItem(PENEMPATAN_KEY, JSON.stringify(data));
   } catch {
-    // Penyimpanan tidak tersedia (mode privat): abaikan dengan aman.
+    // Abaikan jika mode privat
+  }
+}
+
+export function loadDiagnostik(): DataDiagnostikRiset {
+  try {
+    const raw = localStorage.getItem(DIAGNOSTIK_KEY);
+    return raw ? normalkanDiagnostik(JSON.parse(raw)) : buatDiagnostikKosong();
+  } catch {
+    return buatDiagnostikKosong();
+  }
+}
+
+export function saveDiagnostik(data: DataDiagnostikRiset) {
+  try {
+    localStorage.setItem(DIAGNOSTIK_KEY, JSON.stringify(data));
+  } catch {
+    // Abaikan jika mode privat
+  }
+}
+
+export function simpanPercobaanKuis(masukan: {
+  kategori: KategoriKemampuan;
+  benar: boolean;
+  pertanyaan: string;
+  jawabanPengguna: string;
+  jawabanBenar: string;
+}): DataDiagnostikRiset {
+  const baru = catatPercobaanKuis(loadDiagnostik(), masukan);
+  saveDiagnostik(baru);
+  return baru;
+}
+
+export function simpanDiagnostikSpeaking(masukan: {
+  skorSpeaking: number;
+  skorGrammar: number;
+  skorListening: number;
+  skorKosakata: number;
+}): DataDiagnostikRiset {
+  const baru = catatHasilSpeaking(loadDiagnostik(), masukan);
+  saveDiagnostik(baru);
+  return baru;
+}
+
+export function loadProfil(): ProfilMahasiswa {
+  try {
+    const raw = localStorage.getItem(PROFIL_KEY);
+    return raw ? normalkanProfil(JSON.parse(raw)) : buatProfilDefault();
+  } catch {
+    return buatProfilDefault();
+  }
+}
+
+export function saveProfil(profil: ProfilMahasiswa) {
+  try {
+    localStorage.setItem(PROFIL_KEY, JSON.stringify(profil));
+  } catch {
+    // Abaikan jika mode privat
   }
 }

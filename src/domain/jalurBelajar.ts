@@ -1,182 +1,280 @@
-/**
- * Kurikulum jalur belajar bahasa Inggris bertingkat CEFR.
- *
- * Struktur ini meniru "skill tree" Duolingo: unit disusun dari A1 sampai C1,
- * setiap unit berisi beberapa level, dan level terbuka setelah level sebelumnya
- * selesai. Semua kosakata di sini disusun sendiri (bukan salinan dari aplikasi
- * lain) dan dipilih dari kosakata yang paling sering dipakai dalam percakapan
- * sehari-hari.
- *
- * Setiap unit menyimpan:
- * - `grammar`  : poin tata bahasa yang dilatih,
- * - `kosakata` : daftar kata target beserta artinya,
- * - `skenario` : situasi percakapan untuk tutor suara AI,
- * - `latihan`  : soal kuis yang dipakai di layar kuis interaktif.
- */
+import type { TipeKarakter } from "../components/KarakterAnimasi";
+import type { KategoriKemampuan } from "./diagnostikRiset";
 
-/** Tingkat kemampuan berdasarkan kerangka CEFR. */
 export type TingkatCefr = "A1" | "A2" | "B1" | "B2" | "C1";
 
-/** Satu butir kosakata beserta artinya dalam Bahasa Indonesia. */
-export interface Kosakata {
-  /** Kata/frasa bahasa Inggris. */
-  en: string;
-  /** Arti dalam Bahasa Indonesia. */
-  id: string;
-  /** Contoh pemakaian dalam kalimat. */
-  contoh?: string;
-}
-
-/** Tipe soal yang didukung mesin kuis. */
 export type TipeSoal =
   | "susun-kalimat"
-  | "cocokkan-kata"
   | "isi-rumpang"
+  | "pilih-terjemahan"
   | "dengar-ketik"
-  | "pilih-terjemahan";
+  | "cocokkan-pasangan"
+  | "cocokkan-kata";
 
-/** Satu butir soal kuis. */
+export interface PasanganKata {
+  en: string;
+  id: string;
+}
+
+export type Kosakata = ButirKosakata;
+
 export interface Soal {
   id: string;
   tipe: TipeSoal;
-  /** Pertanyaan yang ditampilkan ke pengguna. */
   pertanyaan: string;
-  /** Untuk `susun-kalimat`: blok kata yang harus disusun. */
-  blok?: string[];
-  /** Untuk `isi-rumpang` & `pilih-terjemahan`: pilihan jawaban. */
-  pilihan?: string[];
-  /** Jawaban benar. Untuk `susun-kalimat` berupa kalimat utuh. */
+  petunjuk?: string;
   jawaban: string;
-  /** Teks yang diucapkan untuk tipe `dengar-ketik`. */
-  teksAudio?: string;
+  pilihan?: string[];
+  blok?: string[];
+  kataPengecoh?: string[];
+  pasangan?: PasanganKata[];
+  kategori?: KategoriKemampuan;
+  labelAtas?: string;
+  karakter?: TipeKarakter;
+  lawanBicara?: TipeKarakter;
+  dialogAtas?: string;
+  kalimatSuara?: string;
+  bergambar?: boolean;
+  petunjukKata?: Record<string, string>;
+  penjelasan?: string;
 }
 
-/** Satu level di dalam sebuah unit. */
+export interface ButirKosakata {
+  en: string;
+  id: string;
+  contoh?: string;
+}
+
 export interface LevelJalur {
   id: string;
-  /** Judul level, ditampilkan pada node peta. */
   judul: string;
-  /** Ringkasan singkat isi level. */
   ringkasan: string;
-  /** Soal kuis yang harus diselesaikan. */
-  soal: Soal[];
-  /** XP yang diberikan setelah level selesai. */
   xp: number;
+  soal: Soal[];
 }
 
-/** Satu unit pembelajaran. */
 export interface UnitJalur {
   id: string;
   tingkat: TingkatCefr;
   judul: string;
-  /** Bahasa Indonesia untuk judul, agar pelajar paham konteksnya. */
   judulId: string;
   tema: string;
-  /** Poin tata bahasa yang dilatih di unit ini. */
   grammar: string[];
-  kosakata: Kosakata[];
+  kosakata: ButirKosakata[];
   skenario: string[];
   level: LevelJalur[];
 }
 
-/**
- * Bangun soal "susun kalimat" dari sebuah kalimat benar.
- * Blok kata diacak secara deterministik agar urutannya selalu berbeda dari
- * jawaban, tanpa bergantung pada `Math.random()` (yang membuat tes tidak stabil).
- */
-function soalSusun(id: string, kalimat: string, pertanyaan: string): Soal {
-  const kata = kalimat.split(" ");
-  // Putar daftar satu posisi: cukup untuk mengacak tanpa membuat tes goyah.
-  const blok = [...kata.slice(1), kata[0]];
-  return { id, tipe: "susun-kalimat", pertanyaan, blok, jawaban: kalimat };
+function putarBlok(kata: string[]): string[] {
+  if (kata.length <= 1) return [...kata];
+  const indeksTengah = Math.max(1, Math.floor(kata.length / 2));
+  const hasil = [...kata.slice(indeksTengah), ...kata.slice(0, indeksTengah)];
+  if (hasil.join(" ") === kata.join(" ")) {
+    return [kata[kata.length - 1], ...kata.slice(0, kata.length - 1)];
+  }
+  return hasil;
 }
 
-/** Bangun soal isi rumpang dari kalimat yang satu katanya dihilangkan. */
-function soalRumpang(
+const DAFTAR_KARAKTER_URUT: TipeKarakter[] = [
+  "ibu-dosen",
+  "bapak-dosen",
+  "mahasiswa",
+  "mahasiswi"
+];
+
+function pilihKarakterDariId(id: string): TipeKarakter {
+  let total = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    total += id.charCodeAt(i);
+  }
+  return DAFTAR_KARAKTER_URUT[total % DAFTAR_KARAKTER_URUT.length];
+}
+
+function soalSusun(
   id: string,
   kalimat: string,
-  kataHilang: string,
-  pilihan: string[]
+  artiIndo: string,
+  opsi?: Partial<Soal>
+): Soal {
+  const kata = kalimat.split(" ");
+  return {
+    id,
+    tipe: "susun-kalimat",
+    pertanyaan: "Susun kata-kata ini menjadi kalimat bahasa Inggris yang tepat",
+    petunjuk: artiIndo,
+    jawaban: kalimat,
+    blok: putarBlok(kata),
+    kategori: "grammar",
+    labelAtas: "TATA BAHASA & STRUKTUR",
+    karakter: pilihKarakterDariId(id),
+    kalimatSuara: kalimat,
+    ...opsi
+  };
+}
+
+function soalRumpang(
+  id: string,
+  kalimatRumpang: string,
+  jawaban: string,
+  pilihan: string[],
+  opsi?: Partial<Soal>
+): Soal {
+  const kalimatUtuh = kalimatRumpang.replace("____", jawaban);
+  return {
+    id,
+    tipe: "isi-rumpang",
+    pertanyaan: kalimatRumpang,
+    petunjuk: "Pilih kata yang paling tepat untuk melengkapi kalimat.",
+    jawaban,
+    pilihan,
+    kategori: "grammar",
+    labelAtas: "TATA BAHASA",
+    karakter: pilihKarakterDariId(id),
+    kalimatSuara: kalimatUtuh,
+    ...opsi
+  };
+}
+
+function soalTerjemahan(
+  id: string,
+  en: string,
+  idArti: string,
+  pengecoh: string[],
+  opsi?: Partial<Soal>
+): Soal {
+  return {
+    id,
+    tipe: "pilih-terjemahan",
+    pertanyaan: `Pilih arti yang benar untuk "${en}"`,
+    jawaban: idArti,
+    pilihan: [idArti, ...pengecoh],
+    kategori: "vocabulary",
+    labelAtas: "KOSAKATA BARU",
+    karakter: pilihKarakterDariId(id),
+    kalimatSuara: en,
+    ...opsi
+  };
+}
+
+function soalGambarKosakata(
+  id: string,
+  kataIndo: string,
+  jawabanEn: string,
+  pengecohEn: string[],
+  opsi?: Partial<Soal>
+): Soal {
+  return {
+    id,
+    tipe: "pilih-terjemahan",
+    pertanyaan: `Mana yang artinya "${kataIndo}"?`,
+    jawaban: jawabanEn,
+    pilihan: [jawabanEn, ...pengecohEn],
+    kategori: "vocabulary",
+    labelAtas: "KOSAKATA BARU",
+    bergambar: true,
+    kalimatSuara: jawabanEn,
+    ...opsi
+  };
+}
+
+function soalDialog(
+  id: string,
+  ucapanPertama: string,
+  jawabanBalasan: string,
+  pilihanBalasan: string[],
+  karakterPertama: TipeKarakter = "mahasiswa",
+  karakterKedua: TipeKarakter = "mahasiswi"
 ): Soal {
   return {
     id,
     tipe: "isi-rumpang",
-    pertanyaan: kalimat.replace(kataHilang, "____"),
-    pilihan,
-    jawaban: kataHilang
+    pertanyaan: "Lengkapi kalimatnya",
+    dialogAtas: ucapanPertama,
+    jawaban: jawabanBalasan,
+    pilihan: pilihanBalasan,
+    kategori: "grammar",
+    labelAtas: "PERCAKAPAN",
+    karakter: karakterPertama,
+    lawanBicara: karakterKedua,
+    kalimatSuara: ucapanPertama
   };
 }
 
-/** Bangun soal dengar-lalu-ketik. */
-function soalDengar(id: string, teks: string): Soal {
+function soalDengar(id: string, kalimat: string, opsi?: Partial<Soal>): Soal {
   return {
     id,
     tipe: "dengar-ketik",
-    pertanyaan: "Dengarkan, lalu ketik kalimat yang kamu dengar.",
-    teksAudio: teks,
-    jawaban: teks
+    pertanyaan: "Pilih atau ketik yang kamu dengar",
+    petunjuk: "Putar suara normal atau lambat (kura-kura), lalu masukkan kalimatnya.",
+    jawaban: kalimat,
+    kategori: "listening",
+    labelAtas: "LATIHAN MENDENGARKAN",
+    karakter: pilihKarakterDariId(id),
+    kalimatSuara: kalimat,
+    ...opsi
   };
 }
 
-/** Bangun soal pilih terjemahan. */
-function soalTerjemahan(id: string, kata: string, jawaban: string, pengecoh: string[]): Soal {
+function soalCocok(id: string, pasangan: PasanganKata[]): Soal {
   return {
     id,
-    tipe: "pilih-terjemahan",
-    pertanyaan: `Apa arti "${kata}"?`,
-    pilihan: [jawaban, ...pengecoh].sort(),
-    jawaban
+    tipe: "cocokkan-pasangan",
+    pertanyaan: "Cocokkan kata bahasa Inggris dengan artinya",
+    jawaban: pasangan.map((p) => `${p.en}=${p.id}`).join(";"),
+    pasangan,
+    kategori: "vocabulary",
+    labelAtas: "PASANGKAN KATA"
   };
 }
 
-/**
- * Bangun soal cocokkan kata dari daftar kosakata.
- * Pasangan disembunyikan dari pengguna; UI hanya menerima daftar kosakata.
- */
-function soalCocok(id: string, kosakata: Kosakata[]): Soal {
-  return {
-    id,
-    tipe: "cocokkan-kata",
-    pertanyaan: "Cocokkan kata bahasa Inggris dengan artinya.",
-    jawaban: kosakata.map((k) => `${k.en}=${k.id}`).join("|")
-  };
-}
-
-/**
- * Kurikulum lengkap.
- *
- * Disusun berurutan: makin ke bawah makin sulit. Urutan array inilah yang
- * menentukan urutan pembukaan level.
- */
 export const KURIKULUM: UnitJalur[] = [
   {
     id: "unit-perkenalan",
     tingkat: "A1",
-    judul: "Greetings & Introductions",
-    judulId: "Sapaan & Perkenalan",
-    tema: "Menyapa orang baru dan memperkenalkan diri",
-    grammar: ["To be (am/is/are)", "Kata ganti orang", "Possessive adjective (my/your)"],
+    judul: "Greetings, Drinks & Self-Introduction",
+    judulId: "Sapaan, Minuman & Perkenalan Diri",
+    tema: "Menyapa, menawarkan minuman, dan memperkenalkan diri dengan ramah",
+    grammar: ["To be (am/is/are)", "Kata ganti subjek (I, you, we)", "Ungkapan sopan (please, thank you)"],
     kosakata: [
-      { en: "hello", id: "halo", contoh: "Hello, my name is Rina." },
-      { en: "good morning", id: "selamat pagi", contoh: "Good morning, sir." },
-      { en: "name", id: "nama", contoh: "What is your name?" },
-      { en: "nice to meet you", id: "senang berkenalan", contoh: "Nice to meet you too." },
-      { en: "I am from", id: "saya berasal dari", contoh: "I am from Surabaya." },
-      { en: "How are you", id: "apa kabar", contoh: "How are you today?" },
-      { en: "fine", id: "baik", contoh: "I am fine, thank you." },
+      { en: "coffee", id: "kopi", contoh: "Coffee, please." },
+      { en: "tea", id: "teh", contoh: "Tea or coffee?" },
+      { en: "milk", id: "susu", contoh: "Water and milk, please." },
+      { en: "welcome", id: "selamat datang", contoh: "Hello, welcome!" },
+      { en: "hello", id: "halo", contoh: "Hello, I am Sari." },
+      { en: "good morning", id: "selamat pagi", contoh: "Good morning, everyone." },
+      { en: "nice to meet you", id: "senang berkenalan", contoh: "Nice to meet you, Budi." },
       { en: "friend", id: "teman", contoh: "He is my friend." }
     ],
-    skenario: ["Berkenalan dengan tetangga baru", "Menyapa rekan kerja di pagi hari"],
+    skenario: ["Menawarkan kopi atau teh ke tamu", "Menyapa teman baru di kampus"],
     level: [
       {
         id: "lv-perkenalan-1",
-        judul: "Sapaan Dasar",
-        ringkasan: "Menyapa dan menjawab sapaan",
+        judul: "Menawarkan Minuman & Sapaan",
+        ringkasan: "Kosakata kopi, teh, susu, dan sapaan hangat",
         xp: 20,
         soal: [
-          soalTerjemahan("s1-1", "hello", "halo", ["selamat", "terima kasih", "maaf"]),
-          soalSusun("s1-2", "My name is Rina", "Susun menjadi kalimat yang benar."),
-          soalRumpang("s1-3", "How are you? I am ____", "fine", ["fine", "name", "from"]),
+          soalGambarKosakata("s1-0", "kopi", "coffee", ["tea", "milk"]),
+          soalTerjemahan("s1-1", "good morning", "selamat pagi", ["selamat malam", "terima kasih", "sampai jumpa"], {
+            karakter: "ibu-dosen",
+            petunjukKata: { good: "selamat / baik", morning: "pagi" }
+          }),
+          soalSusun("s1-2", "My name is Sari", "Nama saya adalah Sari.", {
+            karakter: "ibu-dosen",
+            kataPengecoh: ["coffee", "are"],
+            petunjukKata: { My: "milik saya", name: "nama", is: "adalah" }
+          }),
+          soalRumpang("s1-3", "I ____ a student", "am", ["am", "is", "are"], {
+            karakter: "mahasiswa",
+            penjelasan: "Subjek 'I' selalu berpasangan dengan 'am' dalam Simple Present."
+          }),
+          soalDialog(
+            "s1-dialog",
+            "Coffee or tea?",
+            "Coffee, please.",
+            ["Welcome.", "Coffee, please."],
+            "mahasiswa",
+            "bapak-dosen"
+          ),
           soalCocok("s1-4", [
             { en: "hello", id: "halo" },
             { en: "name", id: "nama" },
@@ -190,10 +288,20 @@ export const KURIKULUM: UnitJalur[] = [
         ringkasan: "Menyebut nama, asal, dan kabar",
         xp: 30,
         soal: [
-          soalTerjemahan("s2-1", "nice to meet you", "senang berkenalan", ["sampai jumpa", "selamat pagi", "apa kabar"]),
-          soalSusun("s2-2", "I am from Surabaya", "Susun menjadi kalimat yang benar."),
-          soalDengar("s2-3", "Good morning, nice to meet you"),
-          soalRumpang("s2-4", "____ are you today?", "How", ["How", "What", "Where"])
+          soalGambarKosakata("s2-0", "teh", "tea", ["coffee", "milk"]),
+          soalTerjemahan("s2-1", "nice to meet you", "senang berkenalan", ["sampai jumpa", "selamat pagi", "apa kabar"], {
+            karakter: "mahasiswi"
+          }),
+          soalSusun("s2-2", "I am from Surabaya", "Saya berasal dari Surabaya.", {
+            karakter: "bapak-dosen",
+            kataPengecoh: ["tea", "please"]
+          }),
+          soalDengar("s2-3", "Good morning, nice to meet you", {
+            kataPengecoh: ["tea", "water", "night"]
+          }),
+          soalRumpang("s2-4", "____ are you today?", "How", ["How", "What", "Where"], {
+            penjelasan: "'How are you?' digunakan untuk menanyakan kabar seseorang."
+          })
         ]
       }
     ]
@@ -223,14 +331,18 @@ export const KURIKULUM: UnitJalur[] = [
         ringkasan: "Menyebut anggota keluarga",
         xp: 20,
         soal: [
-          soalTerjemahan("f1-1", "mother", "ibu", ["ayah", "saudara", "anak"]),
-          soalSusun("f1-2", "I have two sisters", "Susun menjadi kalimat yang benar."),
+          soalTerjemahan("f1-1", "mother", "ibu", ["ayah", "saudara", "anak"], { karakter: "ibu-dosen" }),
+          soalSusun("f1-2", "I have two sisters", "Saya punya dua saudara perempuan.", {
+            kataPengecoh: ["has", "brother"]
+          }),
           soalCocok("f1-3", [
             { en: "father", id: "ayah" },
             { en: "mother", id: "ibu" },
             { en: "family", id: "keluarga" }
           ]),
-          soalRumpang("f1-4", "My ____ is a teacher", "father", ["father", "family", "live"])
+          soalRumpang("f1-4", "My ____ is a teacher", "father", ["father", "family", "live"], {
+            penjelasan: "'My father' adalah subjek tunggal yang diikuti 'is a teacher'."
+          })
         ]
       },
       {
@@ -239,9 +351,13 @@ export const KURIKULUM: UnitJalur[] = [
         ringkasan: "Menyusun kalimat tentang keluarga",
         xp: 30,
         soal: [
-          soalSusun("f2-1", "We live in Bandung", "Susun menjadi kalimat yang benar."),
-          soalDengar("f2-2", "My sister has two children"),
-          soalRumpang("f2-3", "He ____ one brother", "has", ["has", "have", "is"]),
+          soalSusun("f2-1", "We live in Bandung", "Kami tinggal di Bandung."),
+          soalDengar("f2-2", "My sister has two children", {
+            kataPengecoh: ["brother", "three"]
+          }),
+          soalRumpang("f2-3", "He ____ one brother", "has", ["has", "have", "is"], {
+            penjelasan: "Subjek tunggal orang ketiga (He/She) menggunakan 'has', bukan 'have'."
+          }),
           soalTerjemahan("f2-4", "married", "menikah", ["lajang", "keluarga", "tinggal"])
         ]
       }
@@ -272,8 +388,9 @@ export const KURIKULUM: UnitJalur[] = [
         ringkasan: "Menyebut rutinitas pagi",
         xp: 25,
         soal: [
+          soalGambarKosakata("d1-0", "sarapan", "breakfast", ["coffee", "work"]),
           soalTerjemahan("d1-1", "breakfast", "sarapan", ["makan siang", "tidur", "bekerja"]),
-          soalSusun("d1-2", "I wake up at six", "Susun menjadi kalimat yang benar."),
+          soalSusun("d1-2", "I wake up at six", "Saya bangun tidur pukul enam."),
           soalRumpang("d1-3", "She ____ comes early", "always", ["always", "breakfast", "busy"]),
           soalDengar("d1-4", "I have breakfast with my family")
         ]
@@ -289,8 +406,10 @@ export const KURIKULUM: UnitJalur[] = [
             { en: "sometimes", id: "kadang-kadang" },
             { en: "usually", id: "biasanya" }
           ]),
-          soalSusun("d2-2", "I usually study at night", "Susun menjadi kalimat yang benar."),
-          soalRumpang("d2-3", "He ____ in a bank", "works", ["works", "work", "working"]),
+          soalSusun("d2-2", "I usually study at night", "Saya biasanya belajar pada malam hari."),
+          soalRumpang("d2-3", "He ____ in a bank", "works", ["works", "work", "working"], {
+            penjelasan: "Simple Present untuk 'He' menambahkan akhiran -s pada kata kerja ('works')."
+          }),
           soalTerjemahan("d2-4", "busy", "sibuk", ["santai", "cepat", "malas"])
         ]
       }
@@ -322,7 +441,7 @@ export const KURIKULUM: UnitJalur[] = [
         xp: 25,
         soal: [
           soalTerjemahan("b1-1", "assignment", "tugas", ["kuliah", "tenggat", "ujian"]),
-          soalSusun("b1-2", "I study English every day", "Susun menjadi kalimat yang benar."),
+          soalSusun("b1-2", "I study English every day", "Saya belajar bahasa Inggris setiap hari."),
           soalRumpang("b1-3", "The ____ is tomorrow", "deadline", ["deadline", "library", "lecture"]),
           soalCocok("b1-4", [
             { en: "library", id: "perpustakaan" },
@@ -337,7 +456,7 @@ export const KURIKULUM: UnitJalur[] = [
         ringkasan: "Menyampaikan pendapat tentang materi",
         xp: 35,
         soal: [
-          soalSusun("b2-1", "I understand the lesson now", "Susun menjadi kalimat yang benar."),
+          soalSusun("b2-1", "I understand the lesson now", "Saya memahami pelajarannya sekarang."),
           soalDengar("b2-2", "I want to improve my speaking"),
           soalRumpang("b2-3", "This topic is ____", "difficult", ["difficult", "improve", "understand"]),
           soalTerjemahan("b2-4", "improve", "meningkatkan", ["menurunkan", "memahami", "membaca"])
@@ -370,7 +489,7 @@ export const KURIKULUM: UnitJalur[] = [
         ringkasan: "Menjawab pertanyaan wawancara",
         xp: 40,
         soal: [
-          soalSusun("k1-1", "I have two years of experience", "Susun menjadi kalimat yang benar."),
+          soalSusun("k1-1", "I have two years of experience", "Saya memiliki pengalaman dua tahun."),
           soalTerjemahan("k1-2", "colleague", "rekan kerja", ["atasan", "pelanggan", "gaji"]),
           soalRumpang("k1-3", "The interview is ____ week", "next", ["next", "last", "every"]),
           soalDengar("k1-4", "I work in a small team")
@@ -387,7 +506,7 @@ export const KURIKULUM: UnitJalur[] = [
             { en: "team", id: "tim" },
             { en: "salary", id: "gaji" }
           ]),
-          soalSusun("k2-2", "We achieved the target last month", "Susun menjadi kalimat yang benar."),
+          soalSusun("k2-2", "We achieved the target last month", "Kami mencapai target bulan lalu."),
           soalRumpang("k2-3", "I am responsible ____ the report", "for", ["for", "to", "with"]),
           soalTerjemahan("k2-4", "achieve", "mencapai", ["meninggalkan", "meminta", "menolak"])
         ]
@@ -419,7 +538,7 @@ export const KURIKULUM: UnitJalur[] = [
         ringkasan: "Meminta dan memberi arah",
         xp: 40,
         soal: [
-          soalSusun("t1-1", "Turn left at the corner", "Susun menjadi kalimat yang benar."),
+          soalSusun("t1-1", "Turn left at the corner", "Belok kiri di sudut jalan."),
           soalTerjemahan("t1-2", "luggage", "bagasi", ["tiket", "bandara", "hotel"]),
           soalRumpang("t1-3", "Go ____ for 200 meters", "straight", ["straight", "near", "left"]),
           soalCocok("t1-4", [
@@ -435,7 +554,7 @@ export const KURIKULUM: UnitJalur[] = [
         ringkasan: "Check-in dan keberangkatan",
         xp: 50,
         soal: [
-          soalSusun("t2-1", "I will book a room tonight", "Susun menjadi kalimat yang benar."),
+          soalSusun("t2-1", "I will book a room tonight", "Saya akan memesan kamar malam ini."),
           soalDengar("t2-2", "We arrive at nine in the morning"),
           soalRumpang("t2-3", "The hotel is ____ the station", "near", ["near", "book", "arrive"]),
           soalTerjemahan("t2-4", "arrive", "tiba", ["pergi", "memesan", "menunggu"])
@@ -468,7 +587,7 @@ export const KURIKULUM: UnitJalur[] = [
         ringkasan: "Mengutarakan sudut pandang",
         xp: 55,
         soal: [
-          soalSusun("o1-1", "I agree with your opinion", "Susun menjadi kalimat yang benar."),
+          soalSusun("o1-1", "I agree with your opinion", "Saya setuju dengan pendapat Anda."),
           soalTerjemahan("o1-2", "however", "namun", ["karena", "walaupun", "sehingga"]),
           soalRumpang("o1-3", "____ it is hard, I still try", "Although", ["Although", "However", "Because"]),
           soalDengar("o1-4", "From my point of view it works well")
@@ -485,7 +604,7 @@ export const KURIKULUM: UnitJalur[] = [
             { en: "evidence", id: "bukti" },
             { en: "conclusion", id: "kesimpulan" }
           ]),
-          soalSusun("o2-2", "We need strong evidence for this", "Susun menjadi kalimat yang benar."),
+          soalSusun("o2-2", "We need strong evidence for this", "Kita membutuhkan bukti kuat untuk ini."),
           soalRumpang("o2-3", "In ____, it is worth it", "conclusion", ["conclusion", "evidence", "argue"]),
           soalTerjemahan("o2-4", "persuade", "meyakinkan", ["melarang", "menolak", "mendengar"])
         ]
@@ -517,7 +636,7 @@ export const KURIKULUM: UnitJalur[] = [
         ringkasan: "Menyampaikan usulan secara formal",
         xp: 70,
         soal: [
-          soalSusun("p1-1", "We will implement it next quarter", "Susun menjadi kalimat yang benar."),
+          soalSusun("p1-1", "We will implement it next quarter", "Kami akan menerapkannya kuartal depan."),
           soalTerjemahan("p1-2", "feasible", "layak", ["mahal", "rumit", "mustahil"]),
           soalRumpang("p1-3", "If we had more data, we ____ decide faster", "would", ["would", "will", "are"]),
           soalDengar("p1-4", "The stakeholder approved the plan yesterday")
@@ -534,7 +653,7 @@ export const KURIKULUM: UnitJalur[] = [
             { en: "mitigate", id: "meredam" },
             { en: "sustainable", id: "berkelanjutan" }
           ]),
-          soalSusun("p2-2", "We need to align our goals first", "Susun menjadi kalimat yang benar."),
+          soalSusun("p2-2", "We need to align our goals first", "Kita perlu menyelaraskan tujuan kita terlebih dahulu."),
           soalRumpang("p2-3", "We can ____ existing data", "leverage", ["leverage", "mitigate", "align"]),
           soalTerjemahan("p2-4", "stakeholder", "pemangku kepentingan", ["pelanggan", "pesaing", "karyawan"])
         ]
@@ -543,12 +662,10 @@ export const KURIKULUM: UnitJalur[] = [
   }
 ];
 
-/** Cari unit berdasarkan id. */
 export function cariUnit(id: string): UnitJalur | null {
   return KURIKULUM.find((unit) => unit.id === id) ?? null;
 }
 
-/** Cari level beserta unit induknya. */
 export function cariLevel(idLevel: string): { unit: UnitJalur; level: LevelJalur } | null {
   for (const unit of KURIKULUM) {
     const level = unit.level.find((item) => item.id === idLevel);
@@ -557,7 +674,6 @@ export function cariLevel(idLevel: string): { unit: UnitJalur; level: LevelJalur
   return null;
 }
 
-/** Daftar seluruh level secara berurutan — inilah urutan kunci-terbuka. */
 export function daftarLevelBerurutan(): Array<{ unit: UnitJalur; level: LevelJalur; indeks: number }> {
   const hasil: Array<{ unit: UnitJalur; level: LevelJalur; indeks: number }> = [];
   let indeks = 0;
@@ -570,7 +686,6 @@ export function daftarLevelBerurutan(): Array<{ unit: UnitJalur; level: LevelJal
   return hasil;
 }
 
-/** Total XP yang bisa dikumpulkan dari seluruh kurikulum. */
 export function totalXpKurikulum(): number {
   return KURIKULUM.reduce(
     (total, unit) => total + unit.level.reduce((sub, level) => sub + level.xp, 0),

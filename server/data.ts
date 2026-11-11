@@ -71,6 +71,30 @@ export const scenarios: Scenario[] = [
         openingQuestion: "Hi, what would you like to order today?"
       }
     ]
+  },
+  {
+    id: "campus-presentation",
+    nameZh: "Presentasi Riset Kampus",
+    nameEn: "Campus Research Pitch",
+    descriptionZh: "Latihan mempresentasikan temuan mini-riset UAS dan menjawab sesi tanya jawab dosen penguji.",
+    tasks: [
+      {
+        id: "research-problem",
+        titleZh: "Latar Belakang Masalah Riset",
+        titleEn: "Research Problem Statement",
+        aiRoleZh: "Dosen Penguji / Academic Examiner",
+        focus: "Sebutkan masalah utama mahasiswa dan solusi yang ditawarkan",
+        openingQuestion: "What is the main English learning problem you found among university students?"
+      },
+      {
+        id: "demo-defense",
+        titleZh: "Tanya Jawab Sidang Proyek",
+        titleEn: "Project Q&A Defense",
+        aiRoleZh: "Dosen Penguji / Academic Examiner",
+        focus: "Jawab lugas dengan bukti fitur aplikasi",
+        openingQuestion: "How does your application help students improve their grammar, listening, and speaking?"
+      }
+    ]
   }
 ];
 

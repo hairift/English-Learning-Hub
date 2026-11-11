@@ -1,191 +1,558 @@
-/**
- * Widget gamifikasi: rentetan harian, XP, liga mingguan, dan nyawa.
- *
- * Seluruh angka dihitung dari aktivitas nyata pengguna (lihat
- * `domain/gamifikasi`). Tidak ada nama pengguna palsu atau angka contoh:
- * bila pengguna belum berlatih, widget menampilkan keadaan nol apa adanya.
- */
-
-import { Flame, Heart, Shield, Star, TrendingUp, Zap } from "lucide-react";
+import React, { useState } from "react";
 import {
-  AMBANG_PROMOSI_LIGA,
-  NYAWA_MAKSIMUM,
-  berikutLiga,
-  nyawaTerkini,
-  papanPeringkatMingguan,
-  sisaXpNaikLiga,
-  xpMingguBerjalan,
+  AMBANG_LIGA,
+  DAFTAR_LIGA,
+  NYAVA_MAKS,
+  buatPapanPeringkat,
   xpMingguan,
   type GamifikasiState,
-  type NamaLiga
+  type Liga
 } from "../domain/gamifikasi";
-import { getShanghaiDate } from "../domain/checkin";
+import { jawabKartu, kartuJatuhTempo, type KartuSrs } from "../domain/srs";
+import { ucapkan } from "../suaraBrowser";
+import { bunyiBenar, bunyiKlik, bunyiSelesai } from "../efekSuara";
 
-/** Warna khas tiap liga, dipakai pada lencana dan bingkai papan. */
-export const WARNA_LIGA: Record<NamaLiga, string> = {
-  Bronze: "#c98a4b",
-  Silver: "#9aa7b4",
-  Gold: "#f2b705",
-  Sapphire: "#2f6fdd",
-  Diamond: "#41c9d6"
+const WARNA_LIGA: Record<Liga, string> = {
+  Bronze: "#cd7f32",
+  Silver: "#94a3b8",
+  Gold: "#eab308",
+  Sapphire: "#3b82f6",
+  Diamond: "#38bdf8"
 };
 
-/** Nama hari singkat dalam Bahasa Indonesia untuk grafik mingguan. */
-const HARI_SINGKAT = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
-
-export interface BarRentetanProps {
-  gamifikasi: GamifikasiState;
-  hariIni?: string;
+export interface BilahGamifikasiProps {
+  state: GamifikasiState;
+  namaPengguna?: string;
 }
 
-/**
- * Bilah atas bergaya bilah status: rentetan, XP total, nyawa, dan pelindung.
- * Sengaja ringkas agar bisa diletakkan di kepala layar mana pun.
- */
-export function BarRentetan({ gamifikasi, hariIni = getShanghaiDate() }: BarRentetanProps) {
-  const nyawa = nyawaTerkini(gamifikasi);
+export function BilahGamifikasi({ state }: BilahGamifikasiProps) {
+  const xpMinggu = xpMingguan(state.xpHarian);
+  const indeksLiga = DAFTAR_LIGA.indexOf(state.liga);
+  const ligaBerikut: Liga | null =
+    indeksLiga < DAFTAR_LIGA.length - 1 ? DAFTAR_LIGA[indeksLiga + 1] : null;
+  const targetBerikut = ligaBerikut ? AMBANG_LIGA[ligaBerikut] : AMBANG_LIGA.Diamond;
+  const persenLiga = Math.min(100, Math.round((xpMinggu / Math.max(1, targetBerikut)) * 100));
 
   return (
-    <div className="bar-status" role="status" aria-label="Ringkasan kemajuan belajar">
-      <div className={`status-chip status-rentetan ${gamifikasi.rentetan > 0 ? "aktif" : ""}`}>
-        <Flame size={18} aria-hidden="true" />
+    <div className="bilah-gamifikasi" aria-label="Status belajar">
+      <div className="chip-gamifikasi" title="Kursus Bahasa Inggris">
+        <span className="ikon-chip" aria-hidden="true">🇺🇸</span>
         <div>
-          <strong>{gamifikasi.rentetan}</strong>
-          <span>hari beruntun</span>
+          <strong>EN</strong>
+          <small>Inggris</small>
         </div>
       </div>
 
-      <div className="status-chip status-xp">
-        <Star size={18} aria-hidden="true" />
+      <div className="chip-gamifikasi" title="Rentetan hari belajar berturut-turut">
+        <span className="ikon-chip" aria-hidden="true">🔥</span>
         <div>
-          <strong>{gamifikasi.xpTotal}</strong>
-          <span>XP total</span>
+          <strong>{state.rentetan}</strong>
+          <small>hari beruntun</small>
         </div>
       </div>
 
-      <div className="status-chip status-nyawa">
-        <Heart size={18} aria-hidden="true" />
+      <div className="chip-gamifikasi" title="Permata untuk membeli item di Toko">
+        <span className="ikon-chip" aria-hidden="true">💎</span>
+        <div>
+          <strong>{state.permata ?? 500}</strong>
+          <small>Permata</small>
+        </div>
+      </div>
+
+      <div className="chip-gamifikasi" title="Total poin pengalaman">
+        <span className="ikon-chip" aria-hidden="true">⚡</span>
+        <div>
+          <strong>{state.xpTotal} XP</strong>
+          <small>{xpMinggu} XP minggu ini</small>
+        </div>
+      </div>
+
+      <div className="chip-gamifikasi" title="Nyawa tersisa untuk kuis">
+        <span className="ikon-chip" aria-hidden="true">❤️</span>
         <div>
           <strong>
-            {nyawa}/{NYAWA_MAKSIMUM}
+            {state.nyawa}/{NYAVA_MAKS}
           </strong>
-          <span>nyawa</span>
+          <small>nyawa</small>
         </div>
       </div>
 
-      <div className="status-chip status-liga" style={{ ["--warna-liga" as string]: WARNA_LIGA[gamifikasi.liga] }}>
-        <TrendingUp size={18} aria-hidden="true" />
-        <div>
-          <strong>Liga {gamifikasi.liga}</strong>
-          <span>{xpMingguan(gamifikasi.xpHarian, hariIni)} XP minggu ini</span>
-        </div>
-      </div>
-
-      <div className="status-chip status-pelindung">
-        <Shield size={18} aria-hidden="true" />
-        <div>
-          <strong>{gamifikasi.pelindungRentetan}</strong>
-          <span>pelindung</span>
+      <div className="chip-gamifikasi chip-liga" title="Liga mingguan">
+        <span
+          className="lencana-liga"
+          style={{ background: WARNA_LIGA[state.liga] }}
+          aria-hidden="true"
+        />
+        <div className="detail-liga">
+          <strong>Liga {state.liga}</strong>
+          <small>
+            {ligaBerikut
+              ? `${xpMinggu}/${targetBerikut} XP ke ${ligaBerikut}`
+              : "Puncak liga tercapai"}
+          </small>
+          <div className="bar-liga" aria-hidden="true">
+            <div style={{ width: `${persenLiga}%` }} />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-export interface PapanLigaProps {
-  gamifikasi: GamifikasiState;
-  hariIni?: string;
-}
-
-/**
- * Papan liga mingguan.
- *
- * Aplikasi ini tidak punya server akun, jadi papan tidak bisa memuat pengguna
- * lain. Alih-alih menampilkan nama palsu, papan menampilkan tonggak perjalanan
- * menuju liga berikutnya dengan posisi pengguna ditandai jelas.
- */
-export function PapanLiga({ gamifikasi, hariIni = getShanghaiDate() }: PapanLigaProps) {
-  const baris = papanPeringkatMingguan(gamifikasi, hariIni);
-  const sisa = sisaXpNaikLiga(gamifikasi, hariIni);
-  const ligaBerikut = berikutLiga(gamifikasi.liga);
-  const ambang = AMBANG_PROMOSI_LIGA[gamifikasi.liga];
-  const xpSaya = xpMingguan(gamifikasi.xpHarian, hariIni);
-  const mingguan = xpMingguBerjalan(gamifikasi.xpHarian, hariIni);
-  const puncak = Math.max(1, ...mingguan.map((item) => item.xp));
-
+export function PapanPeringkatLiga({
+  state,
+  namaPengguna = "Anda"
+}: BilahGamifikasiProps) {
+  const entri = buatPapanPeringkat(state, namaPengguna);
   return (
-    <section className="panel panel-liga">
-      <header className="panel-liga-kepala">
+    <section className="papan-liga" aria-label={`Papan peringkat Liga ${state.liga}`}>
+      <header className="kepala-papan-liga">
         <div>
-          <span className="eyebrow">Liga Mingguan</span>
-          <h3>
-            Liga {gamifikasi.liga}
-            <span className="liga-lencana" style={{ ["--warna-liga" as string]: WARNA_LIGA[gamifikasi.liga] }}>
-              {gamifikasi.liga}
-            </span>
-          </h3>
+          <span className="subjudul-kecil">KOMPETISI MINGGUAN KAMPUS</span>
+          <h4>🏆 Papan Skor Liga {state.liga}</h4>
         </div>
-        <div className="liga-ringkas">
-          <strong>{xpSaya} XP</strong>
-          <span>7 hari terakhir</span>
-        </div>
+        <small>3 teratas promosi ke liga berikutnya</small>
       </header>
-
-      <div className="liga-grafik" aria-label="XP tujuh hari terakhir">
-        {mingguan.map((item, indeks) => {
-          const tinggi = Math.round((item.xp / puncak) * 100);
-          return (
-            <div className="liga-batang" key={item.tanggal}>
-              <span className="liga-batang-nilai">{item.xp > 0 ? item.xp : ""}</span>
-              <span className="liga-batang-latar">
-                <span className="liga-batang-isi" style={{ height: `${Math.max(4, tinggi)}%` }} />
-              </span>
-              <span className="liga-batang-hari">{HARI_SINGKAT[indeks]}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      <ul className="liga-papan">
-        {baris.map((item) => (
-          <li key={item.label} className={item.milikSaya ? "baris-saya" : ""}>
-            <span className="liga-bar-label">{item.label}</span>
-            <span className="liga-bar-xp">{item.xp} XP</span>
+      <ol className="daftar-peringkat">
+        {entri.map((baris, idx) => (
+          <li
+            key={baris.nama}
+            className={baris. adalahPengguna ? "baris-peringkat adalah-pengguna" : "baris-peringkat"}
+          >
+            <span className={`nomor-peringkat nomor-peringkat--${idx + 1}`}>
+              {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : idx + 1}
+            </span>
+            <span className="nama-peringkat">{baris.nama}</span>
+            <span className="xp-peringkat">⚡ {baris.xp} XP</span>
           </li>
         ))}
-      </ul>
-
-      <p className="liga-catatan">
-        <Zap size={15} aria-hidden="true" />
-        {sisa === null
-          ? "Kamu sudah berada di liga tertinggi. Pertahankan ritmenya!"
-          : sisa === 0
-            ? `Target Liga ${ligaBerikut} sudah tercapai — terus kumpulkan XP!`
-            : `Kumpulkan ${sisa} XP lagi untuk naik ke Liga ${ligaBerikut} (target ${ambang} XP).`}
-      </p>
+      </ol>
     </section>
   );
 }
 
-export interface KartuNyawaProps {
-  gamifikasi: GamifikasiState;
+export interface KartuMisiHarianProps {
+  state: GamifikasiState;
+  jumlahPercobaanRiset: number;
+  jumlahLevelSelesai: number;
 }
 
-/** Deretan hati yang menunjukkan sisa nyawa. */
-export function KartuNyawa({ gamifikasi }: KartuNyawaProps) {
-  const nyawa = nyawaTerkini(gamifikasi);
+export function KartuMisiHarian({
+  state,
+  jumlahPercobaanRiset,
+  jumlahLevelSelesai
+}: KartuMisiHarianProps) {
+  const xpMinggu = xpMingguan(state.xpHarian);
+  const misi = [
+    {
+      id: "misi-xp",
+      ikon: "⚡",
+      judul: "Dapatkan 20 XP hari ini",
+      sekarang: Math.min(20, xpMinggu),
+      target: 20,
+      hadiah: "+10 💎"
+    },
+    {
+      id: "misi-level",
+      ikon: "🎯",
+      judul: "Selesaikan 2 pelajaran di jalur belajar",
+      sekarang: Math.min(2, jumlahLevelSelesai),
+      target: 2,
+      hadiah: "+15 💎"
+    },
+    {
+      id: "misi-soal",
+      ikon: "🔥",
+      judul: "Jawab 10 latihan kosakata atau grammar",
+      sekarang: Math.min(10, jumlahPercobaanRiset),
+      target: 10,
+      hadiah: "+20 💎"
+    }
+  ];
+
   return (
-    <div className="kartu-nyawa" aria-label={`Nyawa tersisa ${nyawa} dari ${NYAWA_MAKSIMUM}`}>
-      {Array.from({ length: NYAWA_MAKSIMUM }, (_, indeks) => (
-        <Heart
-          key={indeks}
-          size={20}
-          className={indeks < nyawa ? "hati-penuh" : "hati-kosong"}
-          aria-hidden="true"
-        />
-      ))}
-    </div>
+    <section className="duo-kartu-samping" aria-label="Misi Harian">
+      <div className="duo-kartu-samping-kepala">
+        <h4>Misi Harian</h4>
+        <span className="duo-tautan-kecil"> AKTIF </span>
+      </div>
+
+      <div className="duo-daftar-misi">
+        {misi.map((m) => {
+          const persen = Math.min(100, Math.round((m.sekarang / m.target) * 100));
+          const tuntas = m.sekarang >= m.target;
+          return (
+            <div key={m.id} className="duo-item-misi">
+              <span className="duo-ikon-misi" aria-hidden="true">
+                {m.ikon}
+              </span>
+              <div className="duo-badan-misi">
+                <div className="duo-judul-misi-baris">
+                  <strong>{m.judul}</strong>
+                  <small>{m.hadiah}</small>
+                </div>
+                <div className="duo-batang-misi">
+                  <div
+                    className={`duo-isi-misi ${tuntas ? "duo-isi-misi--tuntas" : ""}`}
+                    style={{ width: `${persen}%` }}
+                  />
+                  <span className="duo-label-batang-misi">
+                    {m.sekarang} / {m.target}
+                  </span>
+                </div>
+              </div>
+              <span className="duo-peti-misi" aria-hidden="true">
+                {tuntas ? "✅" : "🧰"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
-export default BarRentetan;
+export interface TokoPermataProps {
+  state: GamifikasiState;
+  onBeliNyawa: () => void;
+  onBeliPelindung: () => void;
+}
+
+export function TokoPermata({
+  state,
+  onBeliNyawa,
+  onBeliPelindung
+}: TokoPermataProps) {
+  const [pesanToko, setPesanToko] = useState<string | null>(null);
+
+  return (
+    <section className="duo-toko-permata" aria-label="Toko Permata">
+      <header className="duo-toko-kepala">
+        <div>
+          <span className="subjudul-kecil">TOKO KAMPUS CENDEKIA</span>
+          <h3>🏪 Tukarkan Permata Belajar</h3>
+          <p>Gunakan permata dari kuis dan peti hadiah untuk menjaga kelancaran belajarmu.</p>
+        </div>
+        <div className="duo-saldo-permata">
+          <span aria-hidden="true">💎</span>
+          <strong>{state.permata ?? 500}</strong>
+          <small>Permata</small>
+        </div>
+      </header>
+
+      {pesanToko && (
+        <div className="duo-notif-peti" role="status">
+          <span>{pesanToko}</span>
+          <button type="button" onClick={() => setPesanToko(null)}>
+            Tutup
+          </button>
+        </div>
+      )}
+
+      <div className="duo-grid-toko">
+        <article className="duo-item-toko">
+          <div className="duo-ikon-toko" aria-hidden="true">❤️</div>
+          <div className="duo-info-toko">
+            <h4>Isi Penuh Nyawa ({state.nyawa}/{NYAVA_MAKS})</h4>
+            <p>Pulihkan seluruh 5 hati agar kamu bisa terus berlatih kuis tanpa jeda.</p>
+          </div>
+          <button
+            type="button"
+            className="duo-tombol-toko"
+            disabled={state.nyawa >= NYAVA_MAKS || (state.permata ?? 0) < 100}
+            onClick={() => {
+              bunyiSelesai();
+              onBeliNyawa();
+              setPesanToko("Nyawa berhasil diisi penuh menjadi 5 ❤️!");
+            }}
+          >
+            {state.nyawa >= NYAVA_MAKS ? "PENUH" : "💎 100"}
+          </button>
+        </article>
+
+        <article className="duo-item-toko">
+          <div className="duo-ikon-toko" aria-hidden="true">🛡️</div>
+          <div className="duo-info-toko">
+            <h4>Pembeku Rentetan ({state.pelindungRentetan}/3)</h4>
+            <p>Melindungi streak harianmu tetap aman walaupun kamu absen latihan satu hari.</p>
+          </div>
+          <button
+            type="button"
+            className="duo-tombol-toko"
+            disabled={state.pelindungRentetan >= 3 || (state.permata ?? 0) < 150}
+            onClick={() => {
+              bunyiSelesai();
+              onBeliPelindung();
+              setPesanToko("Pembeku Rentetan berhasil ditambahkan 🛡️!");
+            }}
+          >
+            {state.pelindungRentetan >= 3 ? "MAKSIMAL" : "💎 150"}
+          </button>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+const DAFTAR_BUNYI_FONETIK = [
+  {
+    simbol: "/iː/",
+    contoh: "tea",
+    arti: "teh",
+    kalimat: "Tea, please.",
+    kategori: "Vokal Panjang"
+  },
+  {
+    simbol: "/ɪ/",
+    contoh: "milk",
+    arti: "susu",
+    kalimat: "Fresh milk every morning.",
+    kategori: "Vokal Pendek"
+  },
+  {
+    simbol: "/ɒ/",
+    contoh: "coffee",
+    arti: "kopi",
+    kalimat: "Coffee or tea?",
+    kategori: "Vokal Bulat"
+  },
+  {
+    simbol: "/æ/",
+    contoh: "family",
+    arti: "keluarga",
+    kalimat: "I love my family.",
+    kategori: "Vokal Depan"
+  },
+  {
+    simbol: "/ʌ/",
+    contoh: "study",
+    arti: "belajar",
+    kalimat: "I study English every day.",
+    kategori: "Vokal Tengah"
+  },
+  {
+    simbol: "/ɜː/",
+    contoh: "work",
+    arti: "bekerja",
+    kalimat: "We work together in a team.",
+    kategori: "Vokal R-Warna"
+  },
+  {
+    simbol: "/θ/",
+    contoh: "thank you",
+    arti: "terima kasih",
+    kalimat: "Thank you very much.",
+    kategori: "Konsonan Dental"
+  },
+  {
+    simbol: "/ð/",
+    contoh: "brother",
+    arti: "saudara laki-laki",
+    kalimat: "My brother is a student.",
+    kategori: "Konsonan Bersuara"
+  },
+  {
+    simbol: "/ʃ/",
+    contoh: "share",
+    arti: "berbagi",
+    kalimat: "Let us share our opinion.",
+    kategori: "Konsonan Geser"
+  }
+];
+
+export function LabBunyiBahasa() {
+  const [bunyiAktif, setBunyiAktif] = useState(DAFTAR_BUNYI_FONETIK[0]);
+  const [modeSuaraGender, setModeSuaraGender] = useState<"perempuan" | "laki">("perempuan");
+
+  return (
+    <section className="duo-lab-bunyi" aria-label="Lab Bunyi dan Pelafalan Bahasa Inggris">
+      <header className="duo-lab-kepala">
+        <div>
+          <span className="subjudul-kecil">FONETIK & LISTENING</span>
+          <h3>👄 Pelajari Bunyi Bahasa Inggris</h3>
+          <p>
+            Latih telinga dan pengucapanmu dengan mendengarkan bunyi vokal serta konsonan
+            bahasa Inggris dari suara penutur pria maupun wanita.
+          </p>
+        </div>
+
+        <div className="duo-pemilih-suara" role="group" aria-label="Pilih karakter suara">
+          <button
+            type="button"
+            className={`duo-pil-suara ${modeSuaraGender === "perempuan" ? "aktif" : ""}`}
+            onClick={() => {
+              bunyiKlik();
+              setModeSuaraGender("perempuan");
+            }}
+          >
+            👩 Suara Bu Sari (Wanita)
+          </button>
+          <button
+            type="button"
+            className={`duo-pil-suara ${modeSuaraGender === "laki" ? "aktif" : ""}`}
+            onClick={() => {
+              bunyiKlik();
+              setModeSuaraGender("laki");
+            }}
+          >
+            🧔 Suara Pak Aris (Pria)
+          </button>
+        </div>
+      </header>
+
+      <div className="duo-grid-bunyi">
+        {DAFTAR_BUNYI_FONETIK.map((item) => {
+          const dipilih = bunyiAktif.simbol === item.simbol;
+          return (
+            <button
+              key={item.simbol}
+              type="button"
+              className={`duo-kartu-bunyi ${dipilih ? "duo-kartu-bunyi--aktif" : ""}`}
+              onClick={() => {
+                bunyiKlik();
+                setBunyiAktif(item);
+                ucapkan(`${item.contoh}. ${item.kalimat}`, {
+                  gender: modeSuaraGender,
+                  rate: 0.92
+                });
+              }}
+            >
+              <span className="duo-simbol-ipa">{item.simbol}</span>
+              <strong className="duo-contoh-ipa">{item.contoh}</strong>
+              <small className="duo-arti-ipa">{item.arti}</small>
+              <span className="duo-bar-ipa" />
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="duo-detail-bunyi">
+        <div>
+          <span className="duo-lencana-cefr">{bunyiAktif.kategori}</span>
+          <h4>
+            Bunyi {bunyiAktif.simbol} pada kata &ldquo;{bunyiAktif.contoh}&rdquo; ({bunyiAktif.arti})
+          </h4>
+          <p className="duo-kalimat-contoh-ipa">&ldquo;{bunyiAktif.kalimat}&rdquo;</p>
+        </div>
+        <div className="duo-aksi-bunyi">
+          <button
+            type="button"
+            className="duo-tombol-utama"
+            onClick={() =>
+              ucapkan(`${bunyiAktif.contoh}. ${bunyiAktif.kalimat}`, {
+                gender: modeSuaraGender,
+                rate: 0.95
+              })
+            }
+          >
+            🔊 Putar Normal
+          </button>
+          <button
+            type="button"
+            className="duo-tombol-sekunder"
+            onClick={() =>
+              ucapkan(`${bunyiAktif.contoh}. ${bunyiAktif.kalimat}`, {
+                gender: modeSuaraGender,
+                rate: 0.6
+              })
+            }
+          >
+            🐢 Putar Lambat
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export interface PanelUlasanSrsProps {
+  semuaKartu: KartuSrs[];
+  onPerbarui: (kartuBaru: KartuSrs[]) => void;
+}
+
+export function PanelUlasanSrs({ semuaKartu, onPerbarui }: PanelUlasanSrsProps) {
+  const jatuhTempo = kartuJatuhTempo(semuaKartu);
+  const [terbuka, setTerbuka] = useState(false);
+
+  if (semuaKartu.length === 0) {
+    return (
+      <section className="panel-srs kosong">
+        <h4>🗂️ Kartu Ulasan Kosakata (Spaced Repetition)</h4>
+        <p>Selesaikan satu level di jalur belajar untuk mulai mengisi kartu kosakatamu.</p>
+      </section>
+    );
+  }
+
+  if (jatuhTempo.length === 0) {
+    return (
+      <section className="panel-srs selesai">
+        <h4>🗂️ Kartu Ulasan Kosakata</h4>
+        <p>
+          Semua {semuaKartu.length} kartu sudah diulas hari ini. Kembalilah besok untuk menjaga
+          ingatan jangka panjang!
+        </p>
+      </section>
+    );
+  }
+
+  const aktif = jatuhTempo[0];
+  const kataEn = aktif.kosakata?.en ?? aktif.id;
+  const kataId = aktif.kosakata?.id ?? "";
+  const kataContoh = aktif.kosakata?.contoh ?? "";
+
+  function nilai(benar: boolean) {
+    bunyiBenar();
+    const diperbarui = jawabKartu(aktif, benar);
+    const daftarBaru = semuaKartu.map((k) => (k.id === diperbarui.id ? diperbarui : k));
+    setTerbuka(false);
+    onPerbarui(daftarBaru);
+  }
+
+  return (
+    <section className="panel-srs" aria-label="Ulasan kosakata jatuh tempo">
+      <header className="kepala-srs">
+        <h4>🗂️ Ulasan Kosakata (Spaced Repetition)</h4>
+        <span>{jatuhTempo.length} kartu menunggu</span>
+      </header>
+
+      <div className="kartu-srs">
+        <div className="depan-srs">
+          <span className="kata-srs">{kataEn}</span>
+          <button
+            type="button"
+            className="tombol-ucap"
+            onClick={() => ucapkan(`${kataEn}. ${kataContoh}`, { gender: "perempuan" })}
+          >
+            🔊 Dengarkan
+          </button>
+        </div>
+
+        {terbuka ? (
+          <div className="belakang-srs">
+            <p className="arti-srs">{kataId}</p>
+            {kataContoh && <p className="contoh-srs">&ldquo;{kataContoh}&rdquo;</p>}
+            <div className="tombol-nilai-srs">
+              <button type="button" className="nilai-ulang" onClick={() => nilai(false)}>
+                Ulang Besok
+              </button>
+              <button type="button" className="nilai-baik" onClick={() => nilai(true)}>
+                Sudah Hafal
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="tombol-balik-srs"
+            onClick={() => {
+              bunyiKlik();
+              setTerbuka(true);
+            }}
+          >
+            Tampilkan Arti & Contoh
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}

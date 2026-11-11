@@ -1,9 +1,10 @@
-import { ArrowRight, BarChart3, BookOpenCheck, MessageSquareText, Mic2, RotateCcw, Target, X } from "lucide-react";
+import { ArrowRight, BarChart3, BookOpenCheck, MessageSquareText, Mic2, RotateCcw, Target, Volume2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import type { ConversationTurn, ReportResult, SentenceAnalysis } from "../../shared/schemas";
 import type { Scenario } from "../../server/data";
 import { createReportDiagnostics } from "../reportDiagnostics";
+import { ucapkan } from "../suaraBrowser";
 
 type ReportDashboardProps = {
   report: ReportResult;
@@ -208,7 +209,16 @@ function CorrectionAnalysis({ analysis }: { analysis: SentenceAnalysis }) {
           <p>{renderHighlightedText(analysis.original, analysis.highlights.map((item) => item.originalText), "report-diff-bad")}</p>
         </div>
         <div>
-          <span>Better (Lebih Alami)</span>
+          <div className="fix-better-header">
+            <span>Better (Lebih Alami)</span>
+            <button
+              type="button"
+              className="duo-tombol-suara-teks"
+              onClick={() => ucapkan(analysis.improved, { gender: "perempuan", rate: 0.94 })}
+            >
+              <Volume2 size={14} /> Dengarkan
+            </button>
+          </div>
           <p>{renderHighlightedText(analysis.improved, analysis.highlights.map((item) => item.improvedText), "report-diff-good")}</p>
         </div>
       </div>

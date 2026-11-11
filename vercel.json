@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/((?!api/|models/|assets/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+
